@@ -1,0 +1,676 @@
+{
+  "info": {
+    "name": "MediCabinet Backend API",
+    "_postman_id": "a95374f5-99ad-46d0-a4f7-8693e66d31d5",
+    "description": "Collection complete des routes API Laravel (MediCabinet).\n\nVariables:\n- baseUrl: URL API de base\n- token: JWT recuperé apres login\n- ids: remplacez les IDs selon vos donnees seed/test",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "medecinEmail",
+      "value": "admin@medicabinet.ma"
+    },
+    {
+      "key": "secretaireEmail",
+      "value": "secretaire@medicabinet.ma"
+    },
+    {
+      "key": "patientEmail",
+      "value": "patient@medicabinet.ma"
+    },
+    {
+      "key": "password",
+      "value": "password"
+    },
+    {
+      "key": "patientId",
+      "value": "1"
+    },
+    {
+      "key": "adminId",
+      "value": "1"
+    },
+    {
+      "key": "rendezvousId",
+      "value": "1"
+    },
+    {
+      "key": "consultationId",
+      "value": "1"
+    },
+    {
+      "key": "analyseId",
+      "value": "1"
+    },
+    {
+      "key": "ordonnanceId",
+      "value": "1"
+    },
+    {
+      "key": "notificationId",
+      "value": "1"
+    },
+    {
+      "key": "userId",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "00 - Auth (Public)",
+      "auth": {
+        "type": "noauth"
+      },
+      "item": [
+        {
+          "name": "POST Register (Patient)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Test\",\n  \"prenom\": \"Patient\",\n  \"email\": \"newpatient@example.com\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"telephone\": \"0600000000\",\n  \"date_naissance\": \"1996-01-01\",\n  \"cin\": \"ZZ123456\",\n  \"adresse\": \"Rue test\",\n  \"ville\": \"Casablanca\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Login (Medecin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{medecinEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.token) {",
+                  "    pm.collectionVariables.set('token', data.token);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Login (Secretaire)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{secretaireEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Login (Patient)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{patientEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - Auth (Protected)",
+      "item": [
+        {
+          "name": "GET Me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "POST Refresh",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        },
+        {
+          "name": "POST Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Notifications",
+      "item": [
+        {
+          "name": "GET Notifications",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/notifications"
+          }
+        },
+        {
+          "name": "GET Notifications Non Lues",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/notifications/non-lues"
+          }
+        },
+        {
+          "name": "POST Notifications Tout Lire",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/notifications/tout-lire"
+          }
+        },
+        {
+          "name": "PATCH Notification Marquer Lu",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/notifications/{{notificationId}}/lire"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - RendezVous",
+      "item": [
+        {
+          "name": "GET Creneaux",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/rendezvous/creneaux?admin_id={{adminId}}&date=2026-04-15",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "rendezvous",
+                "creneaux"
+              ],
+              "query": [
+                {
+                  "key": "admin_id",
+                  "value": "{{adminId}}"
+                },
+                {
+                  "key": "date",
+                  "value": "2026-04-15"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET RendezVous (liste)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/rendezvous"
+          }
+        },
+        {
+          "name": "POST RendezVous (Patient)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"admin_id\": {{adminId}},\n  \"date_heure\": \"2026-04-20 10:00:00\",\n  \"motif\": \"Controle annuel\",\n  \"duree_minutes\": 30\n}"
+            },
+            "url": "{{baseUrl}}/rendezvous"
+          }
+        },
+        {
+          "name": "GET RendezVous by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/rendezvous/{{rendezvousId}}"
+          }
+        },
+        {
+          "name": "PATCH RendezVous Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statut\": \"confirme\",\n  \"motif\": \"Mise a jour motif\"\n}"
+            },
+            "url": "{{baseUrl}}/rendezvous/{{rendezvousId}}"
+          }
+        },
+        {
+          "name": "PATCH RendezVous Annuler",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/rendezvous/{{rendezvousId}}/annuler"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Patients",
+      "item": [
+        {
+          "name": "GET Patients",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/patients"
+          }
+        },
+        {
+          "name": "GET Patient by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/patients/{{patientId}}"
+          }
+        },
+        {
+          "name": "PATCH Patient Dossier Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ville\": \"Rabat\",\n  \"groupe_sanguin\": \"A+\",\n  \"allergies\": \"Penicilline\",\n  \"poids_kg\": 64.5,\n  \"taille_cm\": 168\n}"
+            },
+            "url": "{{baseUrl}}/patients/{{patientId}}"
+          }
+        },
+        {
+          "name": "PATCH Patient Profil (multipart)",
+          "request": {
+            "method": "PATCH",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "nom",
+                  "value": "NouveauNom",
+                  "type": "text"
+                },
+                {
+                  "key": "prenom",
+                  "value": "NouveauPrenom",
+                  "type": "text"
+                },
+                {
+                  "key": "telephone",
+                  "value": "0633333333",
+                  "type": "text"
+                },
+                {
+                  "key": "photo_profil",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/patients/{{patientId}}/profil"
+          }
+        },
+        {
+          "name": "GET Patient Historique",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/patients/{{patientId}}/historique"
+          }
+        },
+        {
+          "name": "DELETE Patient (Admin)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/admin/patients/{{patientId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Consultations",
+      "item": [
+        {
+          "name": "POST Consultation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"patient_id\": {{patientId}},\n  \"rdv_id\": {{rendezvousId}},\n  \"date\": \"2026-04-15\",\n  \"symptomes\": \"Fatigue\",\n  \"diagnostic\": \"Anemie legere\",\n  \"notes_medecin\": \"Suivi dans 30 jours\"\n}"
+            },
+            "url": "{{baseUrl}}/consultations"
+          }
+        },
+        {
+          "name": "GET Consultation by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/consultations/{{consultationId}}"
+          }
+        },
+        {
+          "name": "PATCH Consultation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"diagnostic\": \"Diagnostic mis a jour\",\n  \"notes_medecin\": \"Notes complementaires\"\n}"
+            },
+            "url": "{{baseUrl}}/consultations/{{consultationId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Analyses",
+      "item": [
+        {
+          "name": "POST Analyse Upload (multipart)",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "consultation_id",
+                  "value": "{{consultationId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "centre_id",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "type_analyse",
+                  "value": "biologie",
+                  "type": "text"
+                },
+                {
+                  "key": "date_analyse",
+                  "value": "2026-04-10",
+                  "type": "text"
+                },
+                {
+                  "key": "fichier",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/analyses"
+          }
+        },
+        {
+          "name": "GET Analyses by Consultation",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/consultations/{{consultationId}}/analyses"
+          }
+        },
+        {
+          "name": "PATCH Analyse Annoter",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"commentaire_medecin\": \"Resultat rassurant\",\n  \"date_resultat\": \"2026-04-11\"\n}"
+            },
+            "url": "{{baseUrl}}/analyses/{{analyseId}}/annoter"
+          }
+        },
+        {
+          "name": "DELETE Analyse",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/analyses/{{analyseId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Ordonnances",
+      "item": [
+        {
+          "name": "POST Ordonnance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consultation_id\": {{consultationId}},\n  \"instructions\": \"Prendre apres repas\",\n  \"medicaments\": [\n    {\n      \"medicament_id\": 1,\n      \"posologie\": \"2x/jour\",\n      \"observation\": \"Pendant 7 jours\",\n      \"quantite\": 14,\n      \"duree_traitement\": \"7 jours\"\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/ordonnances"
+          }
+        },
+        {
+          "name": "GET Ordonnance by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/ordonnances/{{ordonnanceId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Disponibilites",
+      "item": [
+        {
+          "name": "GET Disponibilites",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/disponibilites"
+          }
+        },
+        {
+          "name": "POST Disponibilites Sync",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"disponibilites\": [\n    {\n      \"jour_semaine\": \"Lun\",\n      \"heure_debut\": \"09:00\",\n      \"heure_fin\": \"12:00\",\n      \"duree_min\": 30,\n      \"est_disponible\": true\n    },\n    {\n      \"jour_semaine\": \"Mar\",\n      \"heure_debut\": \"14:00\",\n      \"heure_fin\": \"18:00\",\n      \"duree_min\": 30,\n      \"est_disponible\": true\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/disponibilites/sync"
+          }
+        },
+        {
+          "name": "POST Disponibilite Bloquer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2026-04-18\"\n}"
+            },
+            "url": "{{baseUrl}}/disponibilites/bloquer"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Admin",
+      "item": [
+        {
+          "name": "GET Dashboard",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/dashboard"
+          }
+        },
+        {
+          "name": "GET Admins",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/admin/admins"
+          }
+        },
+        {
+          "name": "POST Create Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"New\",\n  \"prenom\": \"Secretary\",\n  \"email\": \"new.secretary@example.com\",\n  \"password\": \"password123\",\n  \"telephone\": \"0601111111\",\n  \"role\": \"secretaire\",\n  \"matricule\": \"SEC-002\",\n  \"biographie\": \"Profil de test\"\n}"
+            },
+            "url": "{{baseUrl}}/admin/admins"
+          }
+        },
+        {
+          "name": "PATCH Toggle User Active",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/admin/users/{{userId}}/toggle-active"
+          }
+        }
+      ]
+    }
+  ]
+}
