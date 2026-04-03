@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Middleware\RoleMiddleware;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,22 +21,19 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->render(function (AuthenticationException $exception, Request $request) {
-            if ($request->is('api/*')) {
-                return response()->json(['message' => 'Non authentifié.'], 401);
-            }
 
-            return null;
+        // Always return JSON for auth errors - no redirect
+        $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, $request) {
+            return response()->json(['message' => 'Non authentifié.'], 401);
         });
 
         $exceptions->render(function (ValidationException $exception, Request $request) {
             if ($request->is('api/*')) {
                 return response()->json([
                     'message' => 'Données invalides.',
-                    'errors' => $exception->errors(),
+                    'errors'  => $exception->errors(),
                 ], 422);
             }
-
             return null;
         });
 
@@ -45,7 +41,7 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($request->is('api/*')) {
                 return response()->json(['message' => 'Ressource introuvable.'], 404);
             }
-
             return null;
         });
+
     })->create();

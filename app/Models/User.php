@@ -2,23 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
 class User extends Authenticatable implements JWTSubject
 {
-    use HasFactory, Notifiable;
+    use Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
     protected $fillable = [
         'nom',
         'prenom',
@@ -29,30 +20,18 @@ class User extends Authenticatable implements JWTSubject
         'photo_profil',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
-    {
-        return [
-            'is_active' => 'boolean',
-            'password' => 'hashed',
-        ];
-    }
+    protected $casts = [
+        'is_active' => 'boolean',
+        'password'  => 'hashed',
+    ];
 
-    public function getJWTIdentifier(): mixed
+    // ── JWT ──────────────────────────────────────────────────────────────
+    public function getJWTIdentifier()
     {
         return $this->getKey();
     }
@@ -62,26 +41,28 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
-    public function admin(): HasOne
+    // ── Relations ────────────────────────────────────────────────────────
+    public function admin(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Admin::class);
     }
 
-    public function patient(): HasOne
+    public function patient(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Patient::class);
     }
 
-    public function notificationsRecues(): HasMany
+    public function notificationsRecues(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Notification::class, 'destinataire_id');
     }
 
-    public function notificationsEnvoyees(): HasMany
+    public function notificationsEnvoyees(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Notification::class, 'expediteur_id');
     }
 
+    // ── Helpers ──────────────────────────────────────────────────────────
     public function isAdmin(): bool
     {
         return $this->admin()->exists();
