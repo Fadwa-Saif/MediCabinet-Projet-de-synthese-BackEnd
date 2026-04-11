@@ -77,9 +77,9 @@ class RendezVousController extends Controller
         }
 
         $validated = $request->validate([
-            'admin_id' => 'required|integer|exists:admins,id',
-            'date_heure' => 'required|datetime|after:now',
-            'motif' => 'nullable|string|max:255',
+            'admin_id'      => 'required|integer|exists:admins,id',
+            'date_heure'    => 'required|date|after:now',
+            'motif'         => 'nullable|string|max:255',
             'duree_minutes' => 'required|integer|min:1',
         ]);
 
@@ -106,13 +106,20 @@ class RendezVousController extends Controller
     public function update(Request $request, RendezVous $rendezvous): JsonResponse
     {
         $validated = $request->validate([
-            'date_heure' => 'nullable|datetime|after:now',
-            'motif' => 'nullable|string|max:255',
+            'date_heure'    => 'nullable|date|after:now',
+            'motif'         => 'nullable|string|max:255',
             'duree_minutes' => 'nullable|integer|min:1',
-            'statut' => 'nullable|in:en_attente,confirme,annule,termine',
+            'statut'        => 'nullable|in:en_attente,confirme,annule,termine',
         ]);
 
         $rendezvous->update($validated);
+
+        return response()->json($rendezvous, 200);
+    }
+
+    public function show(RendezVous $rendezvous): JsonResponse
+    {
+        $rendezvous->load(['patient.user', 'admin.user', 'consultation']);
 
         return response()->json($rendezvous, 200);
     }

@@ -67,7 +67,7 @@ class AuthController extends Controller
             'password' => $validated['password'],
         ]);
 
-        if ($token === false) {
+        if (!$token) {
             return response()->json(['message' => 'Identifiants incorrects.'], 401);
         }
 
