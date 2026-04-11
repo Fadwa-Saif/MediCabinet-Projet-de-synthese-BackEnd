@@ -43,6 +43,25 @@ class AnalyseController extends Controller
         return response()->json($analyses, 200);
     }
 
+    public function userAnalyses(): JsonResponse
+    {
+        $user = auth('api')->user();
+        $query = Analyse::with('centre');
+
+        if ($user->isPatient()) {
+            $query->whereHas('consultation', function ($q) use ($user) {
+                $q->where('patient_id', $user->patient->id);
+            });
+        } elseif ($user->isMedecin()) {
+            $query->whereHas('consultation', function ($q) use ($user) {
+                $q->where('admin_id', $user->admin->id);
+            });
+        }
+
+        $analyses = $query->orderByDesc('date_analyse')->get();
+        return response()->json($analyses, 200);
+    }
+
     public function annoter(Request $request, Analyse $analyse): JsonResponse
     {
         $validated = $request->validate([

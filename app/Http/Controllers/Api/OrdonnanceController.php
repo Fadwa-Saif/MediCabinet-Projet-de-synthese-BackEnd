@@ -55,4 +55,23 @@ class OrdonnanceController extends Controller
 
         return response()->json($ordonnance, 200);
     }
+
+    public function userOrdonnances(): JsonResponse
+    {
+        $user = auth('api')->user();
+        $query = Ordonnance::with(['medicaments', 'admin.user', 'consultation.patient.user']);
+
+        if ($user->isPatient()) {
+            $query->whereHas('consultation', function ($q) use ($user) {
+                $q->where('patient_id', $user->patient->id);
+            });
+        } elseif ($user->isMedecin()) {
+            $query->whereHas('consultation', function ($q) use ($user) {
+                $q->where('admin_id', $user->admin->id);
+            });
+        }
+
+        $ordonnances = $query->orderByDesc('date')->get();
+        return response()->json($ordonnances, 200);
+    }
 }
