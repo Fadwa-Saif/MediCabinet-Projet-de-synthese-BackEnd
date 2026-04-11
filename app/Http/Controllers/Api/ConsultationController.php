@@ -10,6 +10,24 @@ use Illuminate\Http\Request;
 
 class ConsultationController extends Controller
 {
+    public function index(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        $query = Consultation::with(['patient.user', 'admin.user'])
+            ->orderByDesc('date');
+
+        if ($user->isMedecin()) {
+            $query->where('admin_id', $user->admin->id);
+        } elseif ($user->isPatient()) {
+            $query->where('patient_id', $user->patient->id);
+        }
+
+        $consultations = $query->paginate(20);
+
+        return response()->json($consultations, 200);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $admin = auth('api')->user()->admin;

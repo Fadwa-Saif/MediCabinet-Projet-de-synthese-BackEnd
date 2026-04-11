@@ -35,6 +35,7 @@ Route::get('disponibilites',      [DisponibiliteController::class, 'index'])->mi
 // ── Patient ───────────────────────────────────────────────────────────
 Route::middleware('role:patient')->group(function () {
     Route::get('rendezvous',                              [RendezVousController::class, 'index']);
+    Route::get('consultations',                           [ConsultationController::class, 'index']);
     Route::post('rendezvous',                             [RendezVousController::class, 'store']);
     Route::get('rendezvous/{rendezvous}',                 [RendezVousController::class, 'show']);
     Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
