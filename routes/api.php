@@ -50,6 +50,7 @@ Route::middleware('role:medecin,secretaire')->group(function () {
 
 Route::middleware('role:patient,secretaire')->group(function () {
     Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
+    Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']); 
 });
 
 Route::middleware('role:patient,medecin')->group(function () {

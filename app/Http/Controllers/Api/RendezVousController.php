@@ -135,6 +135,21 @@ class RendezVousController extends Controller
         return response()->json($rendezvous, 200);
     }
 
+    // ← ADD THIS METHOD
+    public function reprendre(RendezVous $rendezvous): JsonResponse
+    {
+        if ($rendezvous->statut !== 'annule') {
+            return response()->json(['message' => 'Seuls les rendez-vous annulés peuvent être repris.'], 422);
+        }
+
+        $rendezvous->update(['statut' => 'en_attente']);
+
+        return response()->json([
+            'message' => 'Rendez-vous repris avec succès',
+            'data' => $rendezvous
+        ], 200);
+    }
+
     private function getDayOfWeekFrench(int $dayOfWeek): string
     {
         $days = [
