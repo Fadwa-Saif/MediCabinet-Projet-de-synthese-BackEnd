@@ -51,6 +51,8 @@ Route::middleware('role:medecin,secretaire')->group(function () {
 Route::middleware('role:patient,secretaire')->group(function () {
     Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
     Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']); 
+    // Allow patients to update their pending appointments
+    Route::patch('rendezvous/{rendezvous}', [RendezVousController::class, 'updatePatient']);
 });
 
 Route::middleware('role:patient,medecin')->group(function () {
