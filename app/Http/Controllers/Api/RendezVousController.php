@@ -70,18 +70,26 @@ class RendezVousController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = auth('api')->user();
-        $patient = $user->patient;
-
-        if (!$patient) {
-            return response()->json(['message' => 'Utilisateur n\'est pas un patient.'], 403);
-        }
-
+        
         $validated = $request->validate([
+            'patient_id'    => 'nullable|integer|exists:patients,id',
             'admin_id'      => 'required|integer|exists:admins,id',
             'date_heure'    => 'required|date|after:now',
             'motif'         => 'nullable|string|max:255',
             'duree_minutes' => 'required|integer|min:1',
         ]);
+
+        $patient_id = null;
+
+        if ($user->isPatient()) {
+            $patient_id = $user->patient->id;
+        } else {
+            // Medecin or Secretaire must provide patient_id
+            if (!$request->has('patient_id')) {
+                return response()->json(['message' => 'Le champ patient_id est requis pour les administrateurs.'], 422);
+            }
+            $patient_id = $validated['patient_id'];
+        }
 
         $conflictingRdv = RendezVous::where('admin_id', $validated['admin_id'])
             ->where('date_heure', $validated['date_heure'])
@@ -92,7 +100,7 @@ class RendezVousController extends Controller
         }
 
         $rendezvous = RendezVous::create([
-            'patient_id' => $patient->id,
+            'patient_id' => $patient_id,
             'admin_id' => $validated['admin_id'],
             'date_heure' => $validated['date_heure'],
             'motif' => $validated['motif'] ?? null,

@@ -27,6 +27,40 @@ class PatientController extends Controller
         return response()->json($patients, 200);
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'nom' => 'required|string|max:50',
+            'prenom' => 'required|string|max:50',
+            'email' => 'required|email|max:100|unique:users',
+            'telephone' => 'nullable|string|max:15',
+            'date_naissance' => 'nullable|date',
+            'cin' => 'nullable|string|max:10|unique:patients',
+            'adresse' => 'nullable|string',
+            'ville' => 'nullable|string|max:100',
+        ]);
+
+        $user = \App\Models\User::create([
+            'nom' => $validated['nom'],
+            'prenom' => $validated['prenom'],
+            'email' => $validated['email'],
+            'password' => \Illuminate\Support\Facades\Hash::make('password123'), // Default password
+            'telephone' => $validated['telephone'] ?? null,
+            'is_active' => 1,
+        ]);
+
+        $patient = Patient::create([
+            'user_id' => $user->id,
+            'date_naissance' => $validated['date_naissance'] ?? null,
+            'cin' => $validated['cin'] ?? null,
+            'adresse' => $validated['adresse'] ?? null,
+            'ville' => $validated['ville'] ?? null,
+            'date_creation_dossier' => now()->toDateString(),
+        ]);
+
+        return response()->json($patient->load('user'), 201);
+    }
+
     public function show(Patient $patient): JsonResponse
     {
         $patient->load([

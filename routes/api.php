@@ -45,7 +45,9 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
 // ── Multi-Role Endpoints ───────────────────────────────────────────────
 Route::middleware('role:medecin,secretaire')->group(function () {
     Route::get('patients',                                [PatientController::class, 'index']);
+    Route::post('patients',                               [PatientController::class, 'store']);
     Route::patch('rendezvous/{rendezvous}',               [RendezVousController::class, 'update']);
+    Route::post('rendezvous/book',                        [RendezVousController::class, 'store']); // Use a specific alias or identical path
 });
 
 Route::middleware('role:patient,secretaire')->group(function () {
@@ -88,11 +90,11 @@ Route::middleware('role:medecin')->group(function () {
 // ── Admin / Dashboard (Capabilities for Medecin & Secretaire) ────────────
 Route::middleware('role:medecin,secretaire')->prefix('admin')->group(function () {
     Route::get('dashboard',                               [AdminController::class, 'dashboard']);
+    Route::get('admins',                                  [AdminController::class, 'index']);
 });
 
 // ── Admin (Capabilities for Medecin only) ──────────────────────────────
 Route::middleware('role:medecin')->prefix('admin')->group(function () {
-    Route::get('admins',                                  [AdminController::class, 'index']);
     Route::post('admins',                                 [AdminController::class, 'store']);
     Route::patch('users/{user}/toggle-active',            [AdminController::class, 'toggleActive']);
     Route::delete('patients/{patient}',                   [PatientController::class, 'destroy']);
