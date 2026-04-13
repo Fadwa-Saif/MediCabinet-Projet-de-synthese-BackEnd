@@ -20,6 +20,7 @@ return new class extends Migration
             $table->text('symptomes')->nullable();
             $table->text('diagnostic')->nullable();
             $table->text('notes_medecin')->nullable();
+            $table->text('ordonnance')->nullable();
             $table->timestamps();
         });
     }

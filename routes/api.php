@@ -67,6 +67,8 @@ Route::middleware('role:patient')->group(function () {
     Route::post('rendezvous',                             [RendezVousController::class, 'store']);
     Route::post('analyses',                               [AnalyseController::class, 'store']);
     Route::patch('patients/{patient}/profil',             [PatientController::class, 'updateProfil']);
+    Route::post('analyses/{analyse}/fichier', [AnalyseController::class, 'attachFichier']);
+
 });
 
 // ── Médecin ───────────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ Route::middleware('role:medecin')->group(function () {
 
     Route::patch('analyses/{analyse}/annoter',            [AnalyseController::class, 'annoter']);
     Route::delete('analyses/{analyse}',                   [AnalyseController::class, 'destroy']);
+    Route::post('analyses/prescrire', [AnalyseController::class, 'prescrire']);
 
     Route::post('disponibilites/sync',                    [DisponibiliteController::class, 'sync']);
     Route::post('disponibilites/bloquer',                 [DisponibiliteController::class, 'bloquer']);

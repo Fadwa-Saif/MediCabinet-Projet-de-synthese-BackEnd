@@ -40,6 +40,8 @@ class ConsultationController extends Controller
             'diagnostic' => 'nullable|string',
             'notes_medecin' => 'nullable|string',
         ]);
+        $validated['admin_id'] = auth()->user()->admin->id; // ← injected server-side
+
 
         $consultation = Consultation::create([
             'rdv_id' => $validated['rdv_id'] ?? null,

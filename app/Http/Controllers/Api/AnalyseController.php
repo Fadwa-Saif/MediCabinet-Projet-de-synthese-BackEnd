@@ -133,6 +133,49 @@ class AnalyseController extends Controller
 
         return response()->json(['message' => 'Analyse supprimée avec succès.'], 200);
     }
+    // Médecin prescrit une analyse depuis une consultation (pas de fichier)
+public function prescrire(Request $request): JsonResponse
+{
+    $validated = $request->validate([
+        'consultation_id' => 'required|integer|exists:consultations,id',
+        'type_analyse'    => 'nullable|string|max:50',
+        'notes_medecin'   => 'nullable|string|max:1000',
+        'date_analyse'    => 'nullable|date',
+    ]);
+
+    // Récupère le patient depuis la consultation
+    $consultation = \App\Models\Consultation::findOrFail($validated['consultation_id']);
+
+    $analyse = Analyse::create([
+        'consultation_id'     => $validated['consultation_id'],
+        'patient_id'          => $consultation->patient_id,
+        'type_analyse'        => $validated['type_analyse'] ?? null,
+        'commentaire_medecin' => $validated['notes_medecin'] ?? null,
+        'date_analyse'        => $validated['date_analyse'] ?? null,
+        // fichier = null → statut "Prescrit"
+    ]);
+
+    return response()->json($analyse, 201);
+}
+
+// Patient envoie le fichier pour une analyse prescrite
+public function attachFichier(Request $request, Analyse $analyse): JsonResponse
+{
+    $request->validate([
+        'fichier' => 'required|file|mimes:pdf,jpg,jpeg,png,gif,webp|max:10240',
+    ]);
+
+    // Supprime l'ancien fichier s'il existe
+    if ($analyse->fichier) {
+        Storage::disk('public')->delete($analyse->fichier);
+    }
+
+    $path = $request->file('fichier')->store('analyses', 'public');
+    $analyse->update(['fichier' => $path]);
+    $analyse->fichier_url = Storage::disk('public')->url($path);
+
+    return response()->json($analyse, 200);
+}
 
     // ── Helper ───────────────────────────────────────────────────────────
 
