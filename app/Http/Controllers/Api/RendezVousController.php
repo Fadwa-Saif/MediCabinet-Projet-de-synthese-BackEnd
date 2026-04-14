@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
 use App\Models\Disponibilite;
 use App\Models\RendezVous;
 use Carbon\Carbon;
@@ -16,6 +17,18 @@ class RendezVousController extends Controller
         $user = auth('api')->user();
 
         $query = RendezVous::with(['patient.user', 'admin.user']);
+
+        $perPage = (int) $request->input('per_page', 20);
+        $perPage = max(1, min($perPage, 200));
+
+        $allowedSortBy = ['created_at', 'date_heure'];
+        $sortBy = $request->input('sort_by', 'created_at');
+        if (!in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'created_at';
+        }
+
+        $sortDir = strtolower((string) $request->input('sort_dir', 'desc'));
+        $sortDir = $sortDir === 'asc' ? 'asc' : 'desc';
 
         if ($request->has('statut')) {
             $query->where('statut', $request->input('statut'));
@@ -31,7 +44,7 @@ class RendezVousController extends Controller
             $query->where('patient_id', $user->patient->id);
         }
 
-        $rendezvous = $query->orderBy('date_heure', 'ASC')->paginate(20);
+        $rendezvous = $query->orderBy($sortBy, $sortDir)->paginate($perPage);
 
         return response()->json($rendezvous, 200);
     }
@@ -54,17 +67,23 @@ class RendezVousController extends Controller
             return response()->json(['creneaux' => []], 200);
         }
 
-        $creneaux = $disponibilite->getCreneaux();
+        $creneauxDisponibles = $disponibilite->getCreneaux();
 
-        $pris = RendezVous::where('admin_id', $validated['admin_id'])
+        $creneauxPris = RendezVous::where('admin_id', $validated['admin_id'])
             ->whereDate('date_heure', $date)
+            ->where('statut', '!=', 'annule')
             ->pluck('date_heure')
             ->map(fn ($dt) => Carbon::parse($dt)->format('H:i'))
             ->toArray();
 
-        $creneaux = array_diff($creneaux, $pris);
+        $creneaux = array_map(function (string $heure) use ($creneauxPris) {
+            return [
+                'heure' => $heure,
+                'disponible' => !in_array($heure, $creneauxPris, true),
+            ];
+        }, $creneauxDisponibles);
 
-        return response()->json(['creneaux' => array_values($creneaux)], 200);
+        return response()->json(['creneaux' => $creneaux], 200);
     }
 
     public function store(Request $request): JsonResponse
@@ -73,11 +92,25 @@ class RendezVousController extends Controller
         
         $validated = $request->validate([
             'patient_id'    => 'nullable|integer|exists:patients,id',
-            'admin_id'      => 'required|integer|exists:admins,id',
+            'admin_id'      => 'nullable|integer|exists:admins,id',
             'date_heure'    => 'required|date|after:now',
             'motif'         => 'nullable|string|max:255',
             'duree_minutes' => 'required|integer|min:1',
         ]);
+
+        $adminId = $validated['admin_id'] ?? null;
+
+        if (!$adminId) {
+            $medecins = Admin::where('role', 'medecin')->orderBy('id')->get();
+
+            if ($medecins->count() !== 1) {
+                return response()->json([
+                    'message' => 'Le médecin du cabinet doit être précisé.',
+                ], 422);
+            }
+
+            $adminId = $medecins->first()->id;
+        }
 
         $patient_id = null;
 
@@ -91,7 +124,7 @@ class RendezVousController extends Controller
             $patient_id = $validated['patient_id'];
         }
 
-        $conflictingRdv = RendezVous::where('admin_id', $validated['admin_id'])
+        $conflictingRdv = RendezVous::where('admin_id', $adminId)
             ->where('date_heure', $validated['date_heure'])
             ->exists();
 
@@ -101,7 +134,7 @@ class RendezVousController extends Controller
 
         $rendezvous = RendezVous::create([
             'patient_id' => $patient_id,
-            'admin_id' => $validated['admin_id'],
+            'admin_id' => $adminId,
             'date_heure' => $validated['date_heure'],
             'motif' => $validated['motif'] ?? null,
             'duree_minutes' => $validated['duree_minutes'],
