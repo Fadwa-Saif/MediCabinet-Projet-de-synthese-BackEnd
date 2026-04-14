@@ -33,18 +33,26 @@ class PatientController extends Controller
             'nom' => 'required|string|max:50',
             'prenom' => 'required|string|max:50',
             'email' => 'required|email|max:100|unique:users',
+            'password' => 'required|string|min:6',
             'telephone' => 'nullable|string|max:15',
             'date_naissance' => 'nullable|date',
             'cin' => 'nullable|string|max:10|unique:patients',
             'adresse' => 'nullable|string',
             'ville' => 'nullable|string|max:100',
+            'groupe_sanguin' => 'nullable|in:A+,A-,B+,B-,AB+,AB-,O+,O-',
+            'antecedents' => 'nullable|string',
+            'antecedents_familiaux' => 'nullable|string',
+            'allergies' => 'nullable|string',
+            'poids_kg' => 'nullable|numeric|min:0',
+            'taille_cm' => 'nullable|integer|min:0',
+            'traitement_en_cours' => 'nullable|string',
         ]);
 
         $user = \App\Models\User::create([
             'nom' => $validated['nom'],
             'prenom' => $validated['prenom'],
             'email' => $validated['email'],
-            'password' => \Illuminate\Support\Facades\Hash::make('password123'), // Default password
+            'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
             'telephone' => $validated['telephone'] ?? null,
             'is_active' => 1,
         ]);
@@ -55,6 +63,13 @@ class PatientController extends Controller
             'cin' => $validated['cin'] ?? null,
             'adresse' => $validated['adresse'] ?? null,
             'ville' => $validated['ville'] ?? null,
+            'groupe_sanguin' => $validated['groupe_sanguin'] ?? null,
+            'antecedents' => $validated['antecedents'] ?? null,
+            'antecedents_familiaux' => $validated['antecedents_familiaux'] ?? null,
+            'allergies' => $validated['allergies'] ?? null,
+            'poids_kg' => $validated['poids_kg'] ?? null,
+            'taille_cm' => $validated['taille_cm'] ?? null,
+            'traitement_en_cours' => $validated['traitement_en_cours'] ?? null,
             'date_creation_dossier' => now()->toDateString(),
         ]);
 
