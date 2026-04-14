@@ -11,12 +11,12 @@ class Analyse extends Model
     use HasFactory;
 
     protected $fillable = [
-         'patient_id',
+        'patient_id',
         'consultation_id',
-         'type_analyse',
-         'laboratoire',
-        'centre_id',
         'type_analyse',
+        'category',
+        'laboratoire',
+        'centre_id',
         'date_analyse',
         'date_resultat',
         'fichier',

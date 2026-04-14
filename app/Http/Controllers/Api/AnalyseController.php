@@ -130,29 +130,31 @@ class AnalyseController extends Controller
         return response()->json(['message' => 'Analyse supprimée avec succès.'], 200);
     }
     // Médecin prescrit une analyse depuis une consultation (pas de fichier)
-public function prescrire(Request $request): JsonResponse
-{
-    $validated = $request->validate([
-        'consultation_id' => 'required|integer|exists:consultations,id',
-        'type_analyse'    => 'nullable|string|max:50',
-        'notes_medecin'   => 'nullable|string|max:1000',
-        'date_analyse'    => 'nullable|date',
-    ]);
+    public function prescrire(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'consultation_id' => 'required|integer|exists:consultations,id',
+            'type_analyse'    => 'nullable|string|max:50',
+            'category'        => 'nullable|string|max:50',
+            'notes_medecin'   => 'nullable|string|max:1000',
+            'date_analyse'    => 'nullable|date',
+        ]);
 
-    // Récupère le patient depuis la consultation
-    $consultation = \App\Models\Consultation::findOrFail($validated['consultation_id']);
+        // Récupère le patient depuis la consultation
+        $consultation = \App\Models\Consultation::findOrFail($validated['consultation_id']);
 
-    $analyse = Analyse::create([
-        'consultation_id'     => $validated['consultation_id'],
-        'patient_id'          => $consultation->patient_id,
-        'type_analyse'        => $validated['type_analyse'] ?? null,
-        'commentaire_medecin' => $validated['notes_medecin'] ?? null,
-        'date_analyse'        => $validated['date_analyse'] ?? null,
-        // fichier = null → statut "Prescrit"
-    ]);
+        $analyse = Analyse::create([
+            'consultation_id'     => $validated['consultation_id'],
+            'patient_id'          => $consultation->patient_id,
+            'type_analyse'        => $validated['type_analyse'] ?? null,
+            'category'            => $validated['category'] ?? null,
+            'commentaire_medecin' => $validated['notes_medecin'] ?? null,
+            'date_analyse'        => $validated['date_analyse'] ?? null,
+            // fichier = null → statut "Prescrit"
+        ]);
 
-    return response()->json($analyse, 201);
-}
+        return response()->json($analyse, 201);
+    }
 
 // Patient envoie le fichier pour une analyse prescrite
 public function attachFichier(Request $request, Analyse $analyse): JsonResponse
