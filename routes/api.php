@@ -5,9 +5,11 @@ use App\Http\Controllers\Api\AnalyseController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ConsultationController;
 use App\Http\Controllers\Api\DisponibiliteController;
+use App\Http\Controllers\Api\MedicamentController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrdonnanceController;
 use App\Http\Controllers\Api\PatientController;
+use App\Http\Controllers\Api\PrescriptionController;
 use App\Http\Controllers\Api\RendezVousController;
 use Illuminate\Support\Facades\Route;
 
@@ -92,6 +94,9 @@ Route::middleware('role:medecin')->group(function () {
 
     Route::post('disponibilites/sync',                    [DisponibiliteController::class, 'sync']);
     Route::post('disponibilites/bloquer',                 [DisponibiliteController::class, 'bloquer']);
+
+    Route::get('medicaments', [MedicamentController::class, 'index']);     // ?search=xxx
+    Route::post('prescriptions', [PrescriptionController::class, 'store']); // pivot ordonnance↔médicament
 });
 
 // ── Admin / Dashboard (Capabilities for Medecin & Secretaire) ────────────
