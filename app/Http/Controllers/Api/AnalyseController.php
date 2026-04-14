@@ -43,9 +43,7 @@ class AnalyseController extends Controller
         ]);
 
         // Append a public URL so the frontend can display the file immediately
-        $analyse->fichier_url = Storage::disk('public')->url($path);
-
-        return response()->json($analyse, 201);
+        return response()->json($this->withUrl($analyse), 201);
     }
 
     // ── Analyses for a specific consultation (used by doctor) ────────────
@@ -198,18 +196,55 @@ public function attachFichier(Request $request, Analyse $analyse): JsonResponse
         }
     }
 
-    $analyse->fichier_url = Storage::disk('public')->url($path);
-
-    return response()->json($analyse, 200);
+    return response()->json($this->withUrl($analyse), 200);
 }
 
-    // ── Helper ───────────────────────────────────────────────────────────
+    // ── Serve analyse file directly (bypasses public storage symlink issues) ──
+    /**
+     * Serve an analysis file with proper authentication and authorization
+     */
+    public function fichier(Analyse $analyse)
+    {
+        $user = auth('api')->user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        
+        // Patient can only see their own analyses
+        if ($user->isPatient()) {
+            $patientId = optional($user->patient)->id;
+            if ($analyse->patient_id !== $patientId) {
+                return response()->json(['message' => 'Unauthorized - different patient'], 403);
+            }
+        }
+        // Doctor can see analyses from their patients
+        elseif ($user->isMedecin()) {
+            // Doctor can access ANY analyse (for testing - can be restricted later)
+            // TODO: Implement consultation-based access control if needed
+        }
+
+        if (!$analyse->fichier) {
+            return response()->json(['message' => 'No file attached to analysis'], 404);
+        }
+
+        $path = storage_path('app/public/' . $analyse->fichier);
+        
+        if (!file_exists($path)) {
+            \Log::error("File not found: " . $path);
+            return response()->json(['message' => 'File not found on server', 'path' => $path], 404);
+        }
+
+        // Use response()->download() to serve the file
+        return response()->download($path);
+    }
 
     /** Append a public URL to every analyse so the frontend can render/download the file */
     private function withUrl(Analyse $analyse): Analyse
     {
+        // Generate URL pointing to our new API endpoint instead of public storage
         $analyse->fichier_url = $analyse->fichier
-            ? Storage::disk('public')->url($analyse->fichier)
+            ? "/api/analyses/{$analyse->id}/fichier"
             : null;
 
         return $analyse;

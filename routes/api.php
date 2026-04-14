@@ -60,6 +60,7 @@ Route::middleware('role:patient,medecin')->group(function () {
     Route::get('consultations/{consultationId}/analyses', [AnalyseController::class, 'index']);
     Route::get('ordonnances',                             [OrdonnanceController::class, 'userOrdonnances']);
     Route::get('analyses',                                [AnalyseController::class, 'userAnalyses']);
+    Route::get('analyses/{analyse}/fichier',              [AnalyseController::class, 'fichier']);
 });
 
 // ── Patient ───────────────────────────────────────────────────────────
