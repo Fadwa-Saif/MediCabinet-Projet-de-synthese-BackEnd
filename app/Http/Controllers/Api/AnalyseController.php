@@ -39,7 +39,6 @@ class AnalyseController extends Controller
             'date_analyse'        => $validated['date_analyse'] ?? null,
             'date_resultat'       => $validated['date_resultat'] ?? null,
             'commentaire_patient' => $validated['commentaire_patient'] ?? null,
-            'is_urgent'           => filter_var($request->input('is_urgent', false), FILTER_VALIDATE_BOOLEAN),
             'fichier'             => $path,
         ]);
 
@@ -99,7 +98,6 @@ class AnalyseController extends Controller
         }
 
         $analyses = $query
-            ->orderByDesc('is_urgent')   // urgent ones first
             ->orderByDesc('date_analyse')
             ->get()
             ->map(fn ($a) => $this->withUrl($a));
@@ -172,6 +170,34 @@ public function attachFichier(Request $request, Analyse $analyse): JsonResponse
 
     $path = $request->file('fichier')->store('analyses', 'public');
     $analyse->update(['fichier' => $path]);
+
+    // ── Notifier le médecin ──────────────────────────────────────
+    if ($analyse->consultation_id) {
+        $consultation = \App\Models\Consultation::with('admin.user')->find($analyse->consultation_id);
+        if ($consultation?->admin?->user_id) {
+            $patient = $analyse->patient;
+            $patientName = $patient?->user
+                ? trim($patient->user->prenom . ' ' . $patient->user->nom)
+                : 'Un patient';
+
+            \App\Models\Notification::create([
+                'expediteur_id'   => $analyse->patient?->user_id,
+                'destinataire_id' => $consultation->admin->user_id,
+                'type'            => 'nouvelle_analyse',
+                'canal'           => 'web',
+                'titre'           => 'Résultat d\'analyse reçu',
+                // JSON dans contenu pour stocker le lien de redirection
+                'contenu'         => json_encode([
+                    'message'    => "{$patientName} a envoyé le résultat de son analyse.",
+                    'patient_id' => $consultation->patient_id,
+                    'analyse_id' => $analyse->id,
+                ]),
+                'lu'              => 0,
+                'date_envoi'      => now(),
+            ]);
+        }
+    }
+
     $analyse->fichier_url = Storage::disk('public')->url($path);
 
     return response()->json($analyse, 200);
