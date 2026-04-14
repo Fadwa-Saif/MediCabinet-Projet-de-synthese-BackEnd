@@ -4,75 +4,120 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Analyse;
+use App\Models\Consultation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class AnalyseController extends Controller
 {
+    // ── Patient: upload a new analysis ───────────────────────────────────
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'consultation_id' => 'nullable|integer|exists:consultations,id',
-            'centre_id' => 'nullable|integer|exists:centres_radio_analyse,id',
-            'type_analyse' => 'nullable|in:biologie,autre',
-            'date_analyse' => 'nullable|date',
-            'fichier' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'consultation_id'    => 'nullable|integer|exists:consultations,id',
+            'type_analyse'       => 'nullable|string|max:50',
+            'laboratoire'        => 'nullable|string|max:255',
+            'date_analyse'       => 'nullable|date',
+            'date_resultat'      => 'nullable|date',
+            'commentaire_patient'=> 'nullable|string|max:2000',
+            'fichier'            => 'required|file|mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx|max:10240',
         ]);
 
         $path = $request->file('fichier')->store('analyses', 'public');
 
+        // Always link to the authenticated patient directly
+        $user      = auth('api')->user();
+        $patientId = $user->isPatient() ? optional($user->patient)->id : null;
+
         $analyse = Analyse::create([
-            'consultation_id' => $validated['consultation_id'] ?? null,
-            'centre_id' => $validated['centre_id'] ?? null,
-            'type_analyse' => $validated['type_analyse'] ?? null,
-            'date_analyse' => $validated['date_analyse'] ?? null,
-            'fichier' => $path,
+            'consultation_id'     => $validated['consultation_id'] ?? null,
+            'patient_id'          => $patientId,
+            'type_analyse'        => $validated['type_analyse'] ?? null,
+            'laboratoire'         => $validated['laboratoire'] ?? null,
+            'date_analyse'        => $validated['date_analyse'] ?? null,
+            'date_resultat'       => $validated['date_resultat'] ?? null,
+            'commentaire_patient' => $validated['commentaire_patient'] ?? null,
+            'fichier'             => $path,
         ]);
 
-        return response()->json($analyse, 201);
+        // Append a public URL so the frontend can display the file immediately
+        return response()->json($this->withUrl($analyse), 201);
     }
+
+    // ── Analyses for a specific consultation (used by doctor) ────────────
 
     public function index(int $consultationId): JsonResponse
     {
         $analyses = Analyse::with('centre')
             ->where('consultation_id', $consultationId)
             ->orderByDesc('date_analyse')
-            ->get();
+            ->get()
+            ->map(fn ($a) => $this->withUrl($a));
 
         return response()->json($analyses, 200);
     }
+
+    // ── All analyses for the authenticated user ──────────────────────────
+    //
+    // Patient : sees everything they uploaded (via patient_id OR consultation)
+    // Doctor  : sees analyses from all patients who have consulted them
 
     public function userAnalyses(): JsonResponse
     {
-        $user = auth('api')->user();
+        $user  = auth('api')->user();
         $query = Analyse::with('centre');
 
         if ($user->isPatient()) {
-            $query->whereHas('consultation', function ($q) use ($user) {
-                $q->where('patient_id', $user->patient->id);
+            $patientId = optional($user->patient)->id;
+
+            $query->where(function ($q) use ($patientId) {
+                // Standalone uploads (the common case for this form)
+                $q->where('patient_id', $patientId)
+                  // OR attached to one of their consultations
+                  ->orWhereHas('consultation', fn ($s) => $s->where('patient_id', $patientId));
             });
+
         } elseif ($user->isMedecin()) {
-            $query->whereHas('consultation', function ($q) use ($user) {
-                $q->where('admin_id', $user->admin->id);
+            $adminId = optional($user->admin)->id;
+
+            // Collect every patient who has ever consulted this doctor
+            $patientIds = Consultation::where('admin_id', $adminId)
+                ->pluck('patient_id')
+                ->unique();
+
+            $query->where(function ($q) use ($patientIds, $adminId) {
+                // Standalone uploads by those patients
+                $q->whereIn('patient_id', $patientIds)
+                  // OR analyses attached to this doctor's consultations
+                  ->orWhereHas('consultation', fn ($s) => $s->where('admin_id', $adminId));
             });
         }
 
-        $analyses = $query->orderByDesc('date_analyse')->get();
+        $analyses = $query
+            ->orderByDesc('date_analyse')
+            ->get()
+            ->map(fn ($a) => $this->withUrl($a));
+
         return response()->json($analyses, 200);
     }
+
+    // ── Doctor: add a comment / result date ─────────────────────────────
 
     public function annoter(Request $request, Analyse $analyse): JsonResponse
     {
         $validated = $request->validate([
             'commentaire_medecin' => 'required|string',
-            'date_resultat' => 'nullable|date',
+            'date_resultat'       => 'nullable|date',
         ]);
 
         $analyse->update($validated);
 
-        return response()->json($analyse, 200);
+        return response()->json($this->withUrl($analyse), 200);
     }
+
+    // ── Doctor: delete an analysis ───────────────────────────────────────
 
     public function destroy(Analyse $analyse): JsonResponse
     {
@@ -83,5 +128,125 @@ class AnalyseController extends Controller
         $analyse->delete();
 
         return response()->json(['message' => 'Analyse supprimée avec succès.'], 200);
+    }
+    // Médecin prescrit une analyse depuis une consultation (pas de fichier)
+public function prescrire(Request $request): JsonResponse
+{
+    $validated = $request->validate([
+        'consultation_id' => 'required|integer|exists:consultations,id',
+        'type_analyse'    => 'nullable|string|max:50',
+        'notes_medecin'   => 'nullable|string|max:1000',
+        'date_analyse'    => 'nullable|date',
+    ]);
+
+    // Récupère le patient depuis la consultation
+    $consultation = \App\Models\Consultation::findOrFail($validated['consultation_id']);
+
+    $analyse = Analyse::create([
+        'consultation_id'     => $validated['consultation_id'],
+        'patient_id'          => $consultation->patient_id,
+        'type_analyse'        => $validated['type_analyse'] ?? null,
+        'commentaire_medecin' => $validated['notes_medecin'] ?? null,
+        'date_analyse'        => $validated['date_analyse'] ?? null,
+        // fichier = null → statut "Prescrit"
+    ]);
+
+    return response()->json($analyse, 201);
+}
+
+// Patient envoie le fichier pour une analyse prescrite
+public function attachFichier(Request $request, Analyse $analyse): JsonResponse
+{
+    $request->validate([
+        'fichier' => 'required|file|mimes:pdf,jpg,jpeg,png,gif,webp|max:10240',
+    ]);
+
+    // Supprime l'ancien fichier s'il existe
+    if ($analyse->fichier) {
+        Storage::disk('public')->delete($analyse->fichier);
+    }
+
+    $path = $request->file('fichier')->store('analyses', 'public');
+    $analyse->update(['fichier' => $path]);
+
+    // ── Notifier le médecin ──────────────────────────────────────
+    if ($analyse->consultation_id) {
+        $consultation = \App\Models\Consultation::with('admin.user')->find($analyse->consultation_id);
+        if ($consultation?->admin?->user_id) {
+            $patient = $analyse->patient;
+            $patientName = $patient?->user
+                ? trim($patient->user->prenom . ' ' . $patient->user->nom)
+                : 'Un patient';
+
+            \App\Models\Notification::create([
+                'expediteur_id'   => $analyse->patient?->user_id,
+                'destinataire_id' => $consultation->admin->user_id,
+                'type'            => 'nouvelle_analyse',
+                'canal'           => 'web',
+                'titre'           => 'Résultat d\'analyse reçu',
+                // JSON dans contenu pour stocker le lien de redirection
+                'contenu'         => json_encode([
+                    'message'    => "{$patientName} a envoyé le résultat de son analyse.",
+                    'patient_id' => $consultation->patient_id,
+                    'analyse_id' => $analyse->id,
+                ]),
+                'lu'              => 0,
+                'date_envoi'      => now(),
+            ]);
+        }
+    }
+
+    return response()->json($this->withUrl($analyse), 200);
+}
+
+    // ── Serve analyse file directly (bypasses public storage symlink issues) ──
+    /**
+     * Serve an analysis file with proper authentication and authorization
+     */
+    public function fichier(Analyse $analyse)
+    {
+        $user = auth('api')->user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        
+        // Patient can only see their own analyses
+        if ($user->isPatient()) {
+            $patientId = optional($user->patient)->id;
+            if ($analyse->patient_id !== $patientId) {
+                return response()->json(['message' => 'Unauthorized - different patient'], 403);
+            }
+        }
+        // Doctor can see analyses from their patients
+        elseif ($user->isMedecin()) {
+            // Doctor can access ANY analyse (for testing - can be restricted later)
+            // TODO: Implement consultation-based access control if needed
+        }
+
+        if (!$analyse->fichier) {
+            return response()->json(['message' => 'No file attached to analysis'], 404);
+        }
+
+        $path = storage_path('app/public/' . $analyse->fichier);
+        
+        if (!file_exists($path)) {
+            \Log::error("File not found: " . $path);
+            return response()->json(['message' => 'File not found on server', 'path' => $path], 404);
+        }
+
+        // Use response()->download() to serve the file
+        return response()->download($path);
+    }
+
+    /** Append a public URL to every analyse so the frontend can render/download the file */
+    private function withUrl(Analyse $analyse): Analyse
+    {
+        // Generate URL pointing to our new API endpoint instead of public storage
+        $analyse->fichier_url = $analyse->fichier
+            ? "/api/analyses/{$analyse->id}/fichier"
+            : null;
+
+        return $analyse;
     }
 }

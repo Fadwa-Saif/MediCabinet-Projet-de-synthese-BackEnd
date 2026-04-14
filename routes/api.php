@@ -52,6 +52,9 @@ Route::middleware('role:medecin,secretaire')->group(function () {
 
 Route::middleware('role:patient,secretaire')->group(function () {
     Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
+    Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']); 
+    // Allow patients to update their pending appointments
+    Route::patch('rendezvous/{rendezvous}', [RendezVousController::class, 'updatePatient']);
 });
 
 Route::middleware('role:patient,medecin')->group(function () {
@@ -59,6 +62,7 @@ Route::middleware('role:patient,medecin')->group(function () {
     Route::get('consultations/{consultationId}/analyses', [AnalyseController::class, 'index']);
     Route::get('ordonnances',                             [OrdonnanceController::class, 'userOrdonnances']);
     Route::get('analyses',                                [AnalyseController::class, 'userAnalyses']);
+    Route::get('analyses/{analyse}/fichier',              [AnalyseController::class, 'fichier']);
 });
 
 // ── Patient ───────────────────────────────────────────────────────────
@@ -66,6 +70,8 @@ Route::middleware('role:patient')->group(function () {
     Route::post('rendezvous',                             [RendezVousController::class, 'store']);
     Route::post('analyses',                               [AnalyseController::class, 'store']);
     Route::patch('patients/{patient}/profil',             [PatientController::class, 'updateProfil']);
+    Route::post('analyses/{analyse}/fichier', [AnalyseController::class, 'attachFichier']);
+
 });
 
 // ── Médecin ───────────────────────────────────────────────────────────
@@ -82,6 +88,7 @@ Route::middleware('role:medecin')->group(function () {
 
     Route::patch('analyses/{analyse}/annoter',            [AnalyseController::class, 'annoter']);
     Route::delete('analyses/{analyse}',                   [AnalyseController::class, 'destroy']);
+    Route::post('analyses/prescrire', [AnalyseController::class, 'prescrire']);
 
     Route::post('disponibilites/sync',                    [DisponibiliteController::class, 'sync']);
     Route::post('disponibilites/bloquer',                 [DisponibiliteController::class, 'bloquer']);

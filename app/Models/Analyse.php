@@ -11,13 +11,17 @@ class Analyse extends Model
     use HasFactory;
 
     protected $fillable = [
+         'patient_id',
         'consultation_id',
+         'type_analyse',
+         'laboratoire',
         'centre_id',
         'type_analyse',
         'date_analyse',
         'date_resultat',
         'fichier',
         'commentaire_medecin',
+        'commentaire_patient',
     ];
 
     protected function casts(): array
@@ -31,6 +35,10 @@ class Analyse extends Model
     public function consultation(): BelongsTo
     {
         return $this->belongsTo(Consultation::class);
+    }
+    public function patient(): BelongsTo
+    {
+        return $this->belongsTo(Patient::class);
     }
 
     public function centre(): BelongsTo

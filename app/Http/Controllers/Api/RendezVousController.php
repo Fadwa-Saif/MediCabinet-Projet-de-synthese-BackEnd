@@ -176,6 +176,21 @@ class RendezVousController extends Controller
         return response()->json($rendezvous, 200);
     }
 
+    // ← ADD THIS METHOD
+    public function reprendre(RendezVous $rendezvous): JsonResponse
+    {
+        if ($rendezvous->statut !== 'annule') {
+            return response()->json(['message' => 'Seuls les rendez-vous annulés peuvent être repris.'], 422);
+        }
+
+        $rendezvous->update(['statut' => 'en_attente']);
+
+        return response()->json([
+            'message' => 'Rendez-vous repris avec succès',
+            'data' => $rendezvous
+        ], 200);
+    }
+
     private function getDayOfWeekFrench(int $dayOfWeek): string
     {
         $days = [
@@ -190,4 +205,43 @@ class RendezVousController extends Controller
 
         return $days[$dayOfWeek] ?? 'Lun';
     }
+
+    //modifier rendez vous par le patient (seulement si en_attente)
+    public function updatePatient(Request $request, RendezVous $rendezvous): JsonResponse
+{
+    $user = auth('api')->user();
+    
+    // Ensure the user owns this appointment
+    if ($user->patient->id !== $rendezvous->patient_id) {
+        return response()->json(['message' => 'Non autorisé.'], 403);
+    }
+    
+    // Only allow editing if status is 'en_attente'
+    if ($rendezvous->statut !== 'en_attente') {
+        return response()->json(['message' => 'Seuls les rendez-vous en attente peuvent être modifiés.'], 422);
+    }
+
+    $validated = $request->validate([
+        'date_heure'    => 'required|date|after:now',
+        'motif'         => 'nullable|string|max:255',
+        'duree_minutes' => 'required|integer|min:1',
+    ]);
+
+    // Check for conflicts (excluding current appointment)
+    $conflictingRdv = RendezVous::where('admin_id', $rendezvous->admin_id)
+        ->where('date_heure', $validated['date_heure'])
+        ->where('id', '!=', $rendezvous->id)
+        ->exists();
+
+    if ($conflictingRdv) {
+        return response()->json(['message' => 'Ce créneau est déjà réservé.'], 409);
+    }
+
+    $rendezvous->update($validated);
+
+    return response()->json([
+        'message' => 'Rendez-vous modifié avec succès',
+        'data' => $rendezvous
+    ], 200);
+}
 }
