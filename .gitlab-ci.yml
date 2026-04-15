@@ -1,0 +1,21 @@
+stages:
+  - test
+
+image: php:8.2
+
+cache:
+  paths:
+    - vendor/
+
+before_script:
+  - apt-get update && apt-get install -y unzip git curl
+  - curl -sS https://getcomposer.org/installer | php
+  - php composer.phar install
+
+test:
+  stage: test
+  script:
+    - cp .env.example .env
+    - touch database/database.sqlite
+    - php artisan key:generate
+    - php artisan test
