@@ -211,8 +211,12 @@ class RendezVousController extends Controller
 {
     $user = auth('api')->user();
     
-    // Ensure the user owns this appointment
-    if ($user->patient->id !== $rendezvous->patient_id) {
+    // Authorize: patients can update their own RDV; secretaries may also update
+    if ($user->isPatient()) {
+        if ($user->patient->id !== $rendezvous->patient_id) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+    } elseif (! $user->isSecretaire()) {
         return response()->json(['message' => 'Non autorisé.'], 403);
     }
     
