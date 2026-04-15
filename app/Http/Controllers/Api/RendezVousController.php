@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\Disponibilite;
 use App\Models\RendezVous;
+use App\Models\Notification;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -153,7 +154,28 @@ class RendezVousController extends Controller
             'statut'        => 'nullable|in:en_attente,confirme,annule,termine',
         ]);
 
+        $oldStatut = $rendezvous->statut;
+
         $rendezvous->update($validated);
+
+        // If status changed to 'confirme', send an in-app notification to the patient
+        if (isset($validated['statut']) && $validated['statut'] === 'confirme' && $oldStatut !== 'confirme') {
+            $patientUserId = $rendezvous->patient?->user?->id ?? null;
+            $sender = auth('api')->user();
+
+            if ($patientUserId) {
+                Notification::create([
+                    'expediteur_id'   => $sender?->id,
+                    'destinataire_id' => $patientUserId,
+                    'type'            => 'confirmation',
+                    'canal'           => 'web',
+                    'titre'           => 'Rendez-vous confirmé',
+                    'contenu'         => 'Votre rendez-vous du ' . Carbon::parse($rendezvous->date_heure)->format('d/m/Y H:i') . ' a été confirmé.',
+                    'lu'              => 0,
+                    'date_envoi'      => Carbon::now(),
+                ]);
+            }
+        }
 
         return response()->json($rendezvous, 200);
     }
