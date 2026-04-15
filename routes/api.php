@@ -45,19 +45,18 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
 });
 
 // ── Multi-Role Endpoints ───────────────────────────────────────────────
-// Allow patients to update their pending appointments (specific patient actions)
-Route::middleware('role:patient,secretaire')->group(function () {
-    Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
-    Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']); 
-    Route::patch('rendezvous/{rendezvous}', [RendezVousController::class, 'updatePatient']);
-});
-
-// Endpoints for medecin and secretaire (admin-like actions)
 Route::middleware('role:medecin,secretaire')->group(function () {
     Route::get('patients',                                [PatientController::class, 'index']);
     Route::post('patients',                               [PatientController::class, 'store']);
     Route::patch('rendezvous/{rendezvous}',               [RendezVousController::class, 'update']);
     Route::post('rendezvous/book',                        [RendezVousController::class, 'store']); // Use a specific alias or identical path
+});
+
+Route::middleware('role:patient,secretaire')->group(function () {
+    Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
+    Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']); 
+    // Allow patients to update their pending appointments
+    //Route::patch('rendezvous/{rendezvous}', [RendezVousController::class, 'updatePatient']);
 });
 
 Route::middleware('role:patient,medecin')->group(function () {
