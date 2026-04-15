@@ -83,8 +83,11 @@ Route::middleware('role:patient,medecin')->group(function () {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── Médecin ───────────────────────────────────────────────────────────
-Route::middleware('role:medecin')->group(function () {
+Route::middleware('role:medecin,secretaire')->group(function () {
     Route::patch('patients/{patient}',                    [PatientController::class, 'update']);
+});
+
+Route::middleware('role:medecin')->group(function () {
     Route::get('patients/{patientId}/historique',         [ConsultationController::class, 'historique']);
 
     Route::post('consultations',                          [ConsultationController::class, 'store']);
@@ -128,5 +131,9 @@ Route::middleware('role:medecin,secretaire')->prefix('admin')->group(function ()
 Route::middleware('role:medecin')->prefix('admin')->group(function () {
     Route::post('admins',                                 [AdminController::class, 'store']);
     Route::patch('users/{user}/toggle-active',            [AdminController::class, 'toggleActive']);
+});
+
+// ── Patient deletion (Medecin & Secretaire) ──────────────────────────
+Route::middleware('role:medecin,secretaire')->group(function () {
     Route::delete('patients/{patient}',                   [PatientController::class, 'destroy']);
 });
