@@ -68,14 +68,19 @@ Route::middleware('role:patient,medecin')->group(function () {
     Route::get('prescriptions',                           [PrescriptionController::class, 'index']);
 });
 
-// ── Patient ───────────────────────────────────────────────────────────
-Route::middleware('role:patient')->group(function () {
-    Route::post('rendezvous',                             [RendezVousController::class, 'store']);
-    Route::post('analyses',                               [AnalyseController::class, 'store']);
-    Route::patch('patients/{patient}/profil',             [PatientController::class, 'updateProfil']);
-    Route::post('analyses/{analyse}/fichier', [AnalyseController::class, 'attachFichier']);
-
-});
+// ═════════════════════════════════════════════════════════════════════════════
+// FIX #2: Reordered route groups to prevent middleware shadowing
+// 
+// PROBLEM: The route POST /analyses/prescrire was originally defined in the 
+// medecin group AFTER the patient group's wildcard route 
+// POST /analyses/{analyse}/fichier. In Laravel, route registration order 
+// matters - the patient middleware could intercept requests intended for 
+// the medecin endpoint.
+//
+// SOLUTION: Moved the entire Médecin route group BEFORE the Patient route 
+// group, ensuring analyses/prescrire is registered before any wildcard 
+// analyses/{...} routes. This guarantees proper middleware assignment.
+// ═════════════════════════════════════════════════════════════════════════════
 
 // ── Médecin ───────────────────────────────────────────────────────────
 Route::middleware('role:medecin')->group(function () {
@@ -83,21 +88,34 @@ Route::middleware('role:medecin')->group(function () {
     Route::get('patients/{patientId}/historique',         [ConsultationController::class, 'historique']);
 
     Route::post('consultations',                          [ConsultationController::class, 'store']);
-    Route::get('consultations/{consultation}',            [ConsultationController::class, 'show']);
-    Route::patch('consultations/{consultation}',          [ConsultationController::class, 'update']);
+    Route::get('consultations/{consultation}',              [ConsultationController::class, 'show']);
+    Route::patch('consultations/{consultation}',            [ConsultationController::class, 'update']);
 
     Route::post('ordonnances',                            [OrdonnanceController::class, 'store']);
     Route::get('ordonnances/{ordonnance}',                [OrdonnanceController::class, 'show']);
 
+    // CRITICAL: analyses/prescrire MUST be defined BEFORE any wildcard analyses/{...} routes
+    // to prevent Laravel from treating "prescrire" as a parameter value for {analyse}
+    Route::post('analyses/prescrire',                       [AnalyseController::class, 'prescrire']);
+    
     Route::patch('analyses/{analyse}/annoter',            [AnalyseController::class, 'annoter']);
     Route::delete('analyses/{analyse}',                   [AnalyseController::class, 'destroy']);
-    Route::post('analyses/prescrire', [AnalyseController::class, 'prescrire']);
 
     Route::post('disponibilites/sync',                    [DisponibiliteController::class, 'sync']);
     Route::post('disponibilites/bloquer',                 [DisponibiliteController::class, 'bloquer']);
 
     Route::get('medicaments', [MedicamentController::class, 'index']);     // ?search=xxx
     Route::post('prescriptions', [PrescriptionController::class, 'store']); // pivot ordonnance↔médicament
+});
+
+// ── Patient ───────────────────────────────────────────────────────────
+Route::middleware('role:patient')->group(function () {
+    Route::post('rendezvous',                             [RendezVousController::class, 'store']);
+    Route::post('analyses',                               [AnalyseController::class, 'store']);
+    Route::patch('patients/{patient}/profil',             [PatientController::class, 'updateProfil']);
+    
+    // Wildcard route - must come AFTER specific analyses routes
+    Route::post('analyses/{analyse}/fichier',             [AnalyseController::class, 'attachFichier']);
 });
 
 // ── Admin / Dashboard (Capabilities for Medecin & Secretaire) ────────────
