@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Analyse;
 use App\Models\Consultation;
+use App\Models\Notification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class AnalyseController extends Controller
 {
@@ -32,6 +34,7 @@ class AnalyseController extends Controller
         $patientId = $user->isPatient() ? optional($user->patient)->id : null;
 
         $analyse = Analyse::create([
+            'group_id'            => null,
             'consultation_id'     => $validated['consultation_id'] ?? null,
             'patient_id'          => $patientId,
             'type_analyse'        => $validated['type_analyse'] ?? null,
@@ -138,12 +141,18 @@ class AnalyseController extends Controller
             'category'        => 'nullable|string|max:50',
             'notes_medecin'   => 'nullable|string|max:1000',
             'date_analyse'    => 'nullable|date',
+            'group_id'        => 'nullable|string|max:64',
+            'notify_patient'  => 'nullable|boolean',
         ]);
 
         // Récupère le patient depuis la consultation
-        $consultation = \App\Models\Consultation::findOrFail($validated['consultation_id']);
+        $consultation = Consultation::with('patient.user')->findOrFail($validated['consultation_id']);
+
+        $groupId = $validated['group_id'] ?? (string) Str::uuid();
+        $shouldNotifyPatient = $validated['notify_patient'] ?? true;
 
         $analyse = Analyse::create([
+            'group_id'            => $groupId,
             'consultation_id'     => $validated['consultation_id'],
             'patient_id'          => $consultation->patient_id,
             'type_analyse'        => $validated['type_analyse'] ?? null,
@@ -153,23 +162,83 @@ class AnalyseController extends Controller
             // fichier = null → statut "Prescrit"
         ]);
 
+        // Notifier le patient qu'une nouvelle analyse a été prescrite
+        $patientUserId = $consultation?->patient?->user_id;
+        if ($patientUserId && $shouldNotifyPatient) {
+            $doctor = auth('api')->user();
+            $doctorName = $doctor
+                ? trim(($doctor->prenom ?? '') . ' ' . ($doctor->nom ?? ''))
+                : 'Votre médecin';
+            $analyseLabel = $analyse->type_analyse ?: "Analyse #{$analyse->id}";
+
+            Notification::create([
+                'expediteur_id'   => $doctor?->id,
+                'destinataire_id' => $patientUserId,
+                'type'            => 'nouvelle_analyse',
+                'canal'           => 'web',
+                'titre'           => 'Nouvelle analyse prescrite',
+                'contenu'         => json_encode([
+                    'message'      => "{$doctorName} vous a prescrit {$analyseLabel}.",
+                    'analyse_id'   => $analyse->id,
+                    'group_id'     => $groupId,
+                    'patient_id'   => $consultation->patient_id,
+                    'redirect_to'  => "/patient/analyses/{$analyse->id}",
+                ]),
+                'lu'              => 0,
+                'date_envoi'      => now(),
+            ]);
+        }
+
         return response()->json($analyse, 201);
     }
 
 // Patient envoie le fichier pour une analyse prescrite
 public function attachFichier(Request $request, Analyse $analyse): JsonResponse
 {
+    $user = auth('api')->user();
+    if ($user?->isPatient()) {
+        $patientId = optional($user->patient)->id;
+        if ((int) $analyse->patient_id !== (int) $patientId) {
+            return response()->json(['message' => 'Accès refusé.'], 403);
+        }
+    }
+
     $request->validate([
-        'fichier' => 'required|file|mimes:pdf,jpg,jpeg,png,gif,webp|max:10240',
+        'fichier' => 'required|file|mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx|max:10240',
     ]);
 
-    // Supprime l'ancien fichier s'il existe
-    if ($analyse->fichier) {
-        Storage::disk('public')->delete($analyse->fichier);
+    $groupQuery = Analyse::query();
+    if (!empty($analyse->group_id)) {
+        $groupQuery->where('group_id', $analyse->group_id);
+    } else {
+        $groupQuery->where('id', $analyse->id);
+    }
+
+    $groupAnalyses = $groupQuery
+        ->where('patient_id', $analyse->patient_id)
+        ->get();
+
+    $oldFiles = $groupAnalyses
+        ->pluck('fichier')
+        ->filter()
+        ->unique()
+        ->values()
+        ->all();
+
+    foreach ($oldFiles as $oldFile) {
+        Storage::disk('public')->delete($oldFile);
     }
 
     $path = $request->file('fichier')->store('analyses', 'public');
-    $analyse->update(['fichier' => $path]);
+
+    foreach ($groupAnalyses as $item) {
+        $item->update([
+            'fichier' => $path,
+            'date_resultat' => now()->toDateString(),
+        ]);
+    }
+
+    $analyse->refresh();
 
     // ── Notifier le médecin ──────────────────────────────────────
     if ($analyse->consultation_id) {
