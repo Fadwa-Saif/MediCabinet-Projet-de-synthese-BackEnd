@@ -134,10 +134,12 @@ class AnalyseController extends Controller
     {
         $validated = $request->validate([
             'consultation_id' => 'required|integer|exists:consultations,id',
-            'type_analyse'    => 'nullable|string|max:50',
+            'type_analyse'    => 'nullable|string|max:500',
             'category'        => 'nullable|string|max:50',
             'notes_medecin'   => 'nullable|string|max:1000',
             'date_analyse'    => 'nullable|date',
+            'group_id'        => 'nullable|string',
+            'notify_patient'  => 'nullable|boolean',
         ]);
 
         // Récupère le patient depuis la consultation
@@ -153,7 +155,7 @@ class AnalyseController extends Controller
             // fichier = null → statut "Prescrit"
         ]);
 
-        return response()->json($analyse, 201);
+        return response()->json(['data' => $analyse], 201);
     }
 
 // Patient envoie le fichier pour une analyse prescrite
