@@ -23,6 +23,12 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
     Route::get('auth/me',         [AuthController::class, 'me']);
     Route::post('auth/logout',    [AuthController::class, 'logout']);
     Route::post('auth/refresh',   [AuthController::class, 'refresh']);
+
+    // Profile (all authenticated users)
+    Route::get('profil',          [AuthController::class, 'profil']);
+    Route::put('profil',          [AuthController::class, 'updateProfil']);
+    Route::post('profil/photo',   [AuthController::class, 'updatePhoto']);
+    Route::put('profil/password', [AuthController::class, 'updatePassword']);
     
     // Notifications
     Route::prefix('notifications')->group(function () {
