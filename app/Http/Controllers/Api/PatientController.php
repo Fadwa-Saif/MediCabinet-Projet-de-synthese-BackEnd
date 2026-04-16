@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Patient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class PatientController extends Controller
 {
@@ -46,34 +49,51 @@ class PatientController extends Controller
             'poids_kg' => 'nullable|numeric|min:0',
             'taille_cm' => 'nullable|integer|min:0',
             'traitement_en_cours' => 'nullable|string',
+            'photo_profil' => 'nullable|image|max:2048',
         ]);
 
-        $user = \App\Models\User::create([
-            'nom' => $validated['nom'],
-            'prenom' => $validated['prenom'],
-            'email' => $validated['email'],
-            'password' => \Illuminate\Support\Facades\Hash::make($validated['password']),
-            'telephone' => $validated['telephone'] ?? null,
-            'is_active' => 1,
-        ]);
+        $result = DB::transaction(function () use ($request, $validated) {
+            $photoPath = null;
 
-        $patient = Patient::create([
-            'user_id' => $user->id,
-            'date_naissance' => $validated['date_naissance'] ?? null,
-            'cin' => $validated['cin'] ?? null,
-            'adresse' => $validated['adresse'] ?? null,
-            'ville' => $validated['ville'] ?? null,
-            'groupe_sanguin' => $validated['groupe_sanguin'] ?? null,
-            'antecedents' => $validated['antecedents'] ?? null,
-            'antecedents_familiaux' => $validated['antecedents_familiaux'] ?? null,
-            'allergies' => $validated['allergies'] ?? null,
-            'poids_kg' => $validated['poids_kg'] ?? null,
-            'taille_cm' => $validated['taille_cm'] ?? null,
-            'traitement_en_cours' => $validated['traitement_en_cours'] ?? null,
-            'date_creation_dossier' => now()->toDateString(),
-        ]);
+            if ($request->hasFile('photo_profil')) {
+                $photoPath = $request->file('photo_profil')->store('photos', 'public');
+            }
 
-        return response()->json($patient->load('user'), 201);
+            $user = \App\Models\User::create([
+                'nom' => $validated['nom'],
+                'prenom' => $validated['prenom'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'telephone' => $validated['telephone'] ?? null,
+                'is_active' => 1,
+                'photo_profil' => $photoPath,
+            ]);
+
+            $patient = Patient::create([
+                'user_id' => $user->id,
+                'date_naissance' => $validated['date_naissance'] ?? null,
+                'cin' => $validated['cin'] ?? null,
+                'adresse' => $validated['adresse'] ?? null,
+                'ville' => $validated['ville'] ?? null,
+                'groupe_sanguin' => $validated['groupe_sanguin'] ?? null,
+                'antecedents' => $validated['antecedents'] ?? null,
+                'antecedents_familiaux' => $validated['antecedents_familiaux'] ?? null,
+                'allergies' => $validated['allergies'] ?? null,
+                'poids_kg' => $validated['poids_kg'] ?? null,
+                'taille_cm' => $validated['taille_cm'] ?? null,
+                'traitement_en_cours' => $validated['traitement_en_cours'] ?? null,
+                'date_creation_dossier' => now()->toDateString(),
+            ]);
+
+            $patient->load('user');
+            if ($patient->user?->photo_profil) {
+                $patient->user->photo_profil = url('storage/' . ltrim($patient->user->photo_profil, '/'));
+            }
+
+            return $patient;
+        });
+
+        return response()->json($result, 201);
     }
 
     public function show(Patient $patient): JsonResponse
