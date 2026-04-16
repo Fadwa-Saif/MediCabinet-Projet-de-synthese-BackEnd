@@ -6,8 +6,8 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'https://medicabinet-projet-30x7z5dsk-saiffadwas-projects.vercel.app',
-    ],
+        'https://medicabinet-projet.vercel.app',
+],
 
     'allowed_origins_patterns' => [],
 
