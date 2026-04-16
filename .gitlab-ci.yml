@@ -1,21 +1,49 @@
 stages:
   - test
+  - sonar
+  - docker
+  - deploy
 
-image: php:8.2
-
-cache:
-  paths:
-    - vendor/
-
-before_script:
-  - apt-get update && apt-get install -y unzip git curl
-  - curl -sS https://getcomposer.org/installer | php
-  - php composer.phar install
-
+# ── TEST ──────────────────────────────────────────
 test:
   stage: test
+  image: php:8.2
+  cache:
+    paths:
+      - vendor/
+  before_script:
+    - apt-get update && apt-get install -y unzip git curl
+    - curl -sS https://getcomposer.org/installer | php
+    - php composer.phar install
   script:
     - cp .env.example .env
     - touch database/database.sqlite
     - php artisan key:generate
     - php artisan test
+
+# ── SONARCLOUD ────────────────────────────────────
+sonarcloud:
+  stage: sonar
+  image: sonarsource/sonar-scanner-cli:latest
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - sonar-scanner
+      -Dsonar.projectKey=$SONAR_PROJECT_KEY
+      -Dsonar.organization=basmach12
+      -Dsonar.sources=app
+      -Dsonar.host.url=$SONAR_HOST_URL
+      -Dsonar.login=$SONAR_TOKEN
+  only:
+    - main
+
+# ── DOCKER BUILD ──────────────────────────────────
+docker-build:
+  stage: docker
+  image: docker:24
+  services:
+    - docker:24-dind
+  script:
+    - docker build -t medicabinet-backend .
+  only:
+    - main
