@@ -87,4 +87,17 @@ class User extends Authenticatable implements JWTSubject
     {
         return "{$this->prenom} {$this->nom}";
     }
+
+    public function getPhotoProfilAttribute($value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
+
+        return url('storage/' . ltrim($value, '/'));
+    }
 }

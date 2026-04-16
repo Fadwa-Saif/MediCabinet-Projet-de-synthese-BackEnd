@@ -196,9 +196,7 @@ class AuthController extends Controller
                 'prenom' => $user->prenom,
                 'email' => $user->email,
                 'telephone' => $user->telephone,
-                'photo_profil' => $user->photo_profil
-                    ? url('storage/' . ltrim($user->photo_profil, '/'))
-                    : null,
+                'photo_profil' => $user->photo_profil,
             ],
         ], 200);
     }
@@ -224,9 +222,7 @@ class AuthController extends Controller
                 'prenom' => $user->prenom,
                 'email' => $user->email,
                 'telephone' => $user->telephone,
-                'photo_profil' => $user->photo_profil
-                    ? url('storage/' . ltrim($user->photo_profil, '/'))
-                    : null,
+                'photo_profil' => $user->photo_profil,
             ],
         ], 200);
     }
@@ -239,8 +235,9 @@ class AuthController extends Controller
             'photo_profil' => 'required|image|max:2048',
         ]);
 
-        if ($user->photo_profil) {
-            Storage::disk('public')->delete($user->photo_profil);
+        $existingPhoto = $user->getRawOriginal('photo_profil');
+        if ($existingPhoto) {
+            Storage::disk('public')->delete($existingPhoto);
         }
 
         $path = $request->file('photo_profil')->store('photos', 'public');

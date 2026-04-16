@@ -86,9 +86,6 @@ class PatientController extends Controller
             ]);
 
             $patient->load('user');
-            if ($patient->user?->photo_profil) {
-                $patient->user->photo_profil = url('storage/' . ltrim($patient->user->photo_profil, '/'));
-            }
 
             return $patient;
         });
