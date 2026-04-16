@@ -122,4 +122,98 @@ class AuthController extends Controller
             'role' => $role,
         ], 200);
     }
+
+    public function profil(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        return response()->json([
+            'data' => [
+                'id' => $user->id,
+                'nom' => $user->nom,
+                'prenom' => $user->prenom,
+                'email' => $user->email,
+                'telephone' => $user->telephone,
+                'photo_profil' => $user->photo_profil
+                    ? url('storage/' . ltrim($user->photo_profil, '/'))
+                    : null,
+            ],
+        ], 200);
+    }
+
+    public function updateProfil(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        $validated = $request->validate([
+            'nom' => 'required|string|max:50',
+            'prenom' => 'required|string|max:50',
+            'telephone' => 'nullable|string|max:15',
+        ]);
+
+        $user->update($validated);
+        $user->refresh();
+
+        return response()->json([
+            'message' => 'Profil mis à jour avec succès.',
+            'data' => [
+                'id' => $user->id,
+                'nom' => $user->nom,
+                'prenom' => $user->prenom,
+                'email' => $user->email,
+                'telephone' => $user->telephone,
+                'photo_profil' => $user->photo_profil
+                    ? url('storage/' . ltrim($user->photo_profil, '/'))
+                    : null,
+            ],
+        ], 200);
+    }
+
+    public function updatePhoto(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        $validated = $request->validate([
+            'photo_profil' => 'required|image|max:2048',
+        ]);
+
+        if ($user->photo_profil) {
+            Storage::disk('public')->delete($user->photo_profil);
+        }
+
+        $path = $request->file('photo_profil')->store('photos', 'public');
+        $user->update(['photo_profil' => $path]);
+
+        return response()->json([
+            'message' => 'Photo de profil mise à jour avec succès.',
+            'photo_profil' => url('storage/' . ltrim($path, '/')),
+            'data' => [
+                'photo_profil' => url('storage/' . ltrim($path, '/')),
+            ],
+        ], 200);
+    }
+
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'Mot de passe actuel incorrect.',
+            ], 422);
+        }
+
+        $user->update([
+            'password' => Hash::make($validated['password']),
+        ]);
+
+        return response()->json([
+            'message' => 'Mot de passe mis à jour avec succès.',
+        ], 200);
+    }
 }

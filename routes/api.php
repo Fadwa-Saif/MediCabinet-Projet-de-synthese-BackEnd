@@ -23,6 +23,12 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
     Route::get('auth/me',         [AuthController::class, 'me']);
     Route::post('auth/logout',    [AuthController::class, 'logout']);
     Route::post('auth/refresh',   [AuthController::class, 'refresh']);
+
+    // Profile (all authenticated users)
+    Route::get('profil',          [AuthController::class, 'profil']);
+    Route::put('profil',          [AuthController::class, 'updateProfil']);
+    Route::post('profil/photo',   [AuthController::class, 'updatePhoto']);
+    Route::put('profil/password', [AuthController::class, 'updatePassword']);
     
     // Notifications
     Route::prefix('notifications')->group(function () {
@@ -83,8 +89,11 @@ Route::middleware('role:patient,medecin')->group(function () {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // ── Médecin ───────────────────────────────────────────────────────────
-Route::middleware('role:medecin')->group(function () {
+Route::middleware('role:medecin,secretaire')->group(function () {
     Route::patch('patients/{patient}',                    [PatientController::class, 'update']);
+});
+
+Route::middleware('role:medecin')->group(function () {
     Route::get('patients/{patientId}/historique',         [ConsultationController::class, 'historique']);
 
     Route::post('consultations',                          [ConsultationController::class, 'store']);
@@ -128,5 +137,9 @@ Route::middleware('role:medecin,secretaire')->prefix('admin')->group(function ()
 Route::middleware('role:medecin')->prefix('admin')->group(function () {
     Route::post('admins',                                 [AdminController::class, 'store']);
     Route::patch('users/{user}/toggle-active',            [AdminController::class, 'toggleActive']);
+});
+
+// ── Patient deletion (Medecin & Secretaire) ──────────────────────────
+Route::middleware('role:medecin,secretaire')->group(function () {
     Route::delete('patients/{patient}',                   [PatientController::class, 'destroy']);
 });

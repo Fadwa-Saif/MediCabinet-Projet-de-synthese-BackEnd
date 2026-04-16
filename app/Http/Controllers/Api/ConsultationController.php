@@ -59,7 +59,7 @@ class ConsultationController extends Controller
 
         $consultation->load(['patient.user', 'admin.user']);
 
-        return response()->json($consultation, 201);
+        return response()->json(['data' => $consultation], 201);
     }
 
     public function show(Consultation $consultation): JsonResponse
