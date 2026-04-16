@@ -22,18 +22,13 @@ test:
     - php artisan test
 
 # ── SONARCLOUD ────────────────────────────────────
-sonarcloud:
+sonarcloud-check:
   stage: sonar
   image: sonarsource/sonar-scanner-cli:latest
   variables:
     GIT_DEPTH: "0"
   script:
-    - sonar-scanner
-      -Dsonar.projectKey=$SONAR_PROJECT_KEY
-      -Dsonar.organization=basmach12
-      -Dsonar.sources=app
-      -Dsonar.host.url=$SONAR_HOST_URL
-      -Dsonar.login=$SONAR_TOKEN
+    - sonar-scanner -Dsonar.projectKey=basmach12_medicabinet-backend -Dsonar.organization=basmach12 -Dsonar.sources=app -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=$SONAR_TOKEN
   only:
     - main
 
