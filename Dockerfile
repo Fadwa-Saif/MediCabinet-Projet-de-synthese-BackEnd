@@ -15,4 +15,4 @@ RUN composer install --no-dev --optimize-autoloader
 
 RUN chmod -R 775 storage bootstrap/cache
 
-CMD php artisan migrate --force && php artisan config:cache && php -S 0.0.0.0:${PORT:-8080} -t public
+CMD php artisan migrate --force && php artisan db:seed --force && php artisan config:cache && php -S 0.0.0.0:${PORT:-8080} -t public
