@@ -13,14 +13,11 @@ use App\Http\Controllers\Api\PrescriptionController;
 use App\Http\Controllers\Api\RendezVousController;
 use Illuminate\Support\Facades\Route;
 
-//test  ----------------------------------
-Route::get('/test', function () {
-    return response()->json(['status' => 'ok']);
-});
+
 
 // ── Public ────────────────────────────────────────────────────────────
-Route::post('auth/register', [AuthController::class, 'register']);
-Route::post('auth/login',    [AuthController::class, 'login']);
+Route::post('register', [AuthController::class, 'register']);
+Route::post('login',    [AuthController::class, 'login']);
 
 // ── Protected — all use role middleware which handles JWT ─────────────
 Route::middleware('role:medecin,secretaire,patient')->group(function () {
