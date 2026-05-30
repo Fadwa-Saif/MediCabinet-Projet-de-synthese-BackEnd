@@ -13,6 +13,11 @@ use App\Http\Controllers\Api\PrescriptionController;
 use App\Http\Controllers\Api\RendezVousController;
 use Illuminate\Support\Facades\Route;
 
+//test  ----------------------------------
+Route::get('/test', function () {
+    return response()->json(['status' => 'ok']);
+});
+
 // ── Public ────────────────────────────────────────────────────────────
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login',    [AuthController::class, 'login']);
