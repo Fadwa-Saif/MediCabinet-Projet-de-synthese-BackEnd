@@ -17,5 +17,6 @@ return [
 
     'max_age' => 0,
 
+    'allowed_origins' => ['*'],
     'supports_credentials' => false,
 ];
