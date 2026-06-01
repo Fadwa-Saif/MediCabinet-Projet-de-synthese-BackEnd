@@ -13,10 +13,6 @@ COPY . .
 
 RUN composer install --no-dev --optimize-autoloader
 
-RUN touch database/database.sqlite
-
 RUN chmod -R 775 storage bootstrap/cache
 
-EXPOSE 10000
-
-CMD php artisan serve --host=0.0.0.0 --port=10000
+CMD php artisan migrate --force && php artisan db:seed --force && php artisan config:cache && php -S 0.0.0.0:${PORT:-8080} -t public
