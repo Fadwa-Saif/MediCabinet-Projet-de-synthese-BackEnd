@@ -18,6 +18,7 @@ class User extends Authenticatable implements JWTSubject
         'telephone',
         'is_active',
         'photo_profil',
+        'cabinet_id',
     ];
 
     protected $hidden = [
@@ -50,6 +51,16 @@ class User extends Authenticatable implements JWTSubject
     public function patient(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Patient::class);
+    }
+
+    public function cabinet(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Cabinet::class);
+    }
+
+    public function cabinetOwned(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Cabinet::class, 'docteur_id');
     }
 
     public function notificationsRecues(): \Illuminate\Database\Eloquent\Relations\HasMany

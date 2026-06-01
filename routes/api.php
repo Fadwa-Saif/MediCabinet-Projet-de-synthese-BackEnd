@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AnalyseController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CabinetController;
 use App\Http\Controllers\Api\ConsultationController;
 use App\Http\Controllers\Api\DisponibiliteController;
 use App\Http\Controllers\Api\MedicamentController;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Route;
 // ── Public ────────────────────────────────────────────────────────────
 Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login',    [AuthController::class, 'login']);
+Route::get('cabinets',       [CabinetController::class, 'search']);
+Route::get('cabinets/search',[CabinetController::class, 'search']);
 
 // ── Protected — all use role middleware which handles JWT ─────────────
 Route::middleware('role:medecin,secretaire,patient')->group(function () {

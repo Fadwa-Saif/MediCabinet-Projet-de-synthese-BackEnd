@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Admin;
+use App\Models\Cabinet;
 use App\Models\Patient;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Tymon\JWTAuth\Facades\JWTAuth;
 
 class AuthController extends Controller
@@ -16,6 +20,7 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'role' => 'nullable|string|in:patient,medecin,secretaire,doctor,secretary',
             'nom' => 'required|string|max:50',
             'prenom' => 'required|string|max:50',
             'email' => 'required|email|max:100|unique:users',
@@ -25,35 +30,98 @@ class AuthController extends Controller
             'cin' => 'nullable|string|max:10|unique:patients',
             'adresse' => 'nullable|string',
             'ville' => 'nullable|string|max:100',
+            'specialite' => 'nullable|string|max:120',
+            'cabinet_id' => 'nullable|exists:cabinets,id',
+            'cabinet' => 'nullable|array',
+            'cabinet.nom' => 'nullable|string|max:150',
+            'cabinet.adresse' => 'nullable|string',
+            'cabinet.ville' => 'nullable|string|max:100',
+            'cabinet.specialite' => 'nullable|string|max:120',
         ]);
 
-        $user = User::create([
-            'nom' => $validated['nom'],
-            'prenom' => $validated['prenom'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'telephone' => $validated['telephone'] ?? null,
-            'is_active' => 1,
-        ]);
+        $role = $this->normalizeRole($validated['role'] ?? 'patient');
 
-        Patient::create([
-            'user_id' => $user->id,
-            'date_naissance' => $validated['date_naissance'] ?? null,
-            'cin' => $validated['cin'] ?? null,
-            'adresse' => $validated['adresse'] ?? null,
-            'ville' => $validated['ville'] ?? null,
-            'date_creation_dossier' => now()->toDateString(),
-        ]);
+        return DB::transaction(function () use ($validated, $role) {
+            $user = User::create([
+                'nom' => $validated['nom'],
+                'prenom' => $validated['prenom'],
+                'email' => $validated['email'],
+                'password' => Hash::make($validated['password']),
+                'telephone' => $validated['telephone'] ?? null,
+                'is_active' => 1,
+            ]);
 
-        $token = JWTAuth::fromUser($user);
-        $user->load('patient');
+            $profile = null;
 
-        return response()->json([
-            'token' => $token,
-            'token_type' => 'bearer',
-            'expires_in' => config('jwt.ttl') * 60,
-            'user' => $user,
-        ], 201);
+            if ($role === 'patient') {
+                Patient::create([
+                    'user_id' => $user->id,
+                    'date_naissance' => $validated['date_naissance'] ?? null,
+                    'cin' => $validated['cin'] ?? null,
+                    'adresse' => $validated['adresse'] ?? null,
+                    'ville' => $validated['ville'] ?? null,
+                    'date_creation_dossier' => now()->toDateString(),
+                ]);
+                $user->load('patient');
+                $profile = $user->patient;
+            } elseif ($role === 'medecin') {
+                $cabinetData = $validated['cabinet'] ?? null;
+
+                if (!$cabinetData) {
+                    throw ValidationException::withMessages([
+                        'cabinet' => 'Les informations du cabinet sont obligatoires pour un docteur.',
+                    ]);
+                }
+
+                Admin::create([
+                    'user_id' => $user->id,
+                    'role' => 'medecin',
+                    'matricule' => null,
+                    'biographie' => null,
+                ]);
+
+                $cabinet = Cabinet::create([
+                    'nom' => $cabinetData['nom'],
+                    'adresse' => $cabinetData['adresse'],
+                    'ville' => $cabinetData['ville'] ?? null,
+                    'specialite' => $cabinetData['specialite'] ?? ($validated['specialite'] ?? 'Médecine générale'),
+                    'docteur_id' => $user->id,
+                ]);
+
+                $user->update(['cabinet_id' => $cabinet->id]);
+                $user->load(['admin', 'cabinet']);
+                $profile = $user->admin;
+            } elseif ($role === 'secretaire') {
+                if (empty($validated['cabinet_id'])) {
+                    throw ValidationException::withMessages([
+                        'cabinet_id' => 'Veuillez sélectionner un cabinet existant.',
+                    ]);
+                }
+
+                Admin::create([
+                    'user_id' => $user->id,
+                    'role' => 'secretaire',
+                    'matricule' => null,
+                    'biographie' => null,
+                ]);
+
+                $user->update(['cabinet_id' => $validated['cabinet_id']]);
+                $user->load(['admin', 'cabinet']);
+                $profile = $user->admin;
+            }
+
+            $token = JWTAuth::fromUser($user);
+
+            return response()->json([
+                'token' => $token,
+                'token_type' => 'bearer',
+                'expires_in' => config('jwt.ttl') * 60,
+                'user' => $user,
+                'profile' => $profile,
+                'role' => $role,
+                'cabinet' => $user->cabinet ?? null,
+            ], 201);
+        });
     }
 
     public function login(Request $request): JsonResponse
@@ -61,6 +129,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
+            'role' => 'nullable|string|in:patient,medecin,secretaire,doctor,secretary',
         ]);
 
         $token = auth('api')->attempt([
@@ -79,10 +148,20 @@ class AuthController extends Controller
             return response()->json(['message' => 'Compte désactivé.'], 403);
         }
 
-        $user->load(['admin', 'patient']);
+        $user->load(['admin', 'patient', 'cabinet']);
 
         $profile = $user->admin ?? $user->patient;
         $role = $user->admin?->role ?? 'patient';
+
+        $requestedRole = isset($validated['role']) ? $this->normalizeRole($validated['role']) : null;
+
+        if ($requestedRole && $requestedRole !== $role) {
+            auth('api')->logout();
+
+            return response()->json([
+                'message' => 'Rôle incorrect pour ce compte.',
+            ], 403);
+        }
 
         return response()->json([
             'token' => $token,
@@ -91,6 +170,7 @@ class AuthController extends Controller
             'user' => $user,
             'profile' => $profile,
             'role' => $role,
+            'cabinet' => $user->cabinet,
         ], 200);
     }
 
@@ -114,14 +194,24 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = auth('api')->user()->load(['admin', 'patient']);
+        $user = auth('api')->user()->load(['admin', 'patient', 'cabinet']);
 
         $role = $user->admin?->role ?? 'patient';
 
         return response()->json([
             'user' => $user,
             'role' => $role,
+            'cabinet' => $user->cabinet,
         ], 200);
+    }
+
+    private function normalizeRole(?string $role): string
+    {
+        return match ($role) {
+            'doctor' => 'medecin',
+            'secretary' => 'secretaire',
+            default => $role ?? 'patient',
+        };
     }
 
     public function profil(Request $request): JsonResponse
