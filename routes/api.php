@@ -12,6 +12,9 @@ use App\Http\Controllers\Api\OrdonnanceController;
 use App\Http\Controllers\Api\PatientController;
 use App\Http\Controllers\Api\PrescriptionController;
 use App\Http\Controllers\Api\RendezVousController;
+use App\Models\Cabinet;
+use App\Models\Patient;
+use App\Models\RendezVous;
 use Illuminate\Support\Facades\Route;
 
 
@@ -21,6 +24,13 @@ Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login',    [AuthController::class, 'login']);
 Route::get('cabinets',       [CabinetController::class, 'search']);
 Route::get('cabinets/search',[CabinetController::class, 'search']);
+Route::get('stats', function () {
+    return response()->json([
+        'cabinets' => Cabinet::count(),
+        'patients' => Patient::count(),
+        'appointments' => RendezVous::count(),
+    ], 200);
+});
 
 // ── Protected — all use role middleware which handles JWT ─────────────
 Route::middleware('role:medecin,secretaire,patient')->group(function () {
