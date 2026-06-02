@@ -21,6 +21,7 @@ Route::post('auth/register', [AuthController::class, 'register']);
 Route::post('auth/login',    [AuthController::class, 'login']);
 Route::get('cabinets',       [CabinetController::class, 'search']);
 Route::get('cabinets/search',[CabinetController::class, 'search']);
+Route::get('cabinets/{cabinet}/disponibilites', [CabinetController::class, 'disponibilites']);
 
 // ── Protected — all use role middleware which handles JWT ─────────────
 Route::middleware('role:medecin,secretaire,patient')->group(function () {
@@ -34,6 +35,9 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
     Route::put('profil',          [AuthController::class, 'updateProfil']);
     Route::post('profil/photo',   [AuthController::class, 'updatePhoto']);
     Route::put('profil/password', [AuthController::class, 'updatePassword']);
+
+    Route::post('appointments',                 [RendezVousController::class, 'appointmentStore']);
+    Route::get('patient/appointments',          [RendezVousController::class, 'patientAppointments']);
     
     // Notifications
     Route::prefix('notifications')->group(function () {
@@ -50,7 +54,18 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
     
     // Disponibilites
     Route::get('disponibilites',              [DisponibiliteController::class, 'index']);
-    
+
+    Route::middleware('role:medecin,secretaire')->group(function () {
+        Route::get('doctor/patients', [PatientController::class, 'doctorPatients']);
+        Route::get('doctor/patients/{patient}/medical-record', [PatientController::class, 'doctorPatientRecord']);
+        Route::get('doctor/patients/{patient}/record', [PatientController::class, 'doctorPatientRecord']);
+        Route::get('doctor/patients/{patient}/consultations', [PatientController::class, 'doctorPatientConsultations']);
+        Route::get('doctor/patients/{patient}/analyses', [PatientController::class, 'doctorPatientAnalyses']);
+        Route::get('secretary/patients', [PatientController::class, 'secretaryPatients']);
+        Route::get('secretary/appointments', [PatientController::class, 'secretaryAppointments']);
+        Route::get('patients/search', [PatientController::class, 'searchByContact']);
+    });
+
     // Patients
     Route::get('patients/{patient}',          [PatientController::class, 'show']);
 });

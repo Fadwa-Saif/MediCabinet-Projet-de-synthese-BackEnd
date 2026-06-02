@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Concerns\ResolvesCabinetContext;
 use App\Models\Analyse;
 use App\Models\Consultation;
 use App\Models\Notification;
@@ -13,6 +14,8 @@ use Illuminate\Support\Str;
 
 class AnalyseController extends Controller
 {
+    use ResolvesCabinetContext;
+
     // ── Patient: upload a new analysis ───────────────────────────────────
 
     public function store(Request $request): JsonResponse
@@ -53,6 +56,12 @@ class AnalyseController extends Controller
 
     public function index(int $consultationId): JsonResponse
     {
+        $consultation = Consultation::with('admin.user')->findOrFail($consultationId);
+
+        if ($response = $this->ensureConsultationAccess($consultation)) {
+            return $response;
+        }
+
         $analyses = Analyse::with('centre')
             ->where('consultation_id', $consultationId)
             ->orderByDesc('date_analyse')
@@ -83,18 +92,24 @@ class AnalyseController extends Controller
             });
 
         } elseif ($user->isMedecin()) {
-            $adminId = optional($user->admin)->id;
+            $cabinetId = $this->tokenCabinetId();
+
+            if (!$cabinetId) {
+                return response()->json([], 200);
+            }
 
             // Collect every patient who has ever consulted this doctor
-            $patientIds = Consultation::where('admin_id', $adminId)
+            $patientIds = Consultation::whereHas('admin.user', function ($builder) use ($cabinetId) {
+                    $builder->where('cabinet_id', $cabinetId);
+                })
                 ->pluck('patient_id')
                 ->unique();
 
-            $query->where(function ($q) use ($patientIds, $adminId) {
+            $query->where(function ($q) use ($patientIds, $cabinetId) {
                 // Standalone uploads by those patients
                 $q->whereIn('patient_id', $patientIds)
                   // OR analyses attached to this doctor's consultations
-                  ->orWhereHas('consultation', fn ($s) => $s->where('admin_id', $adminId));
+                  ->orWhereHas('consultation.admin.user', fn ($s) => $s->where('cabinet_id', $cabinetId));
             });
         }
 
@@ -110,6 +125,10 @@ class AnalyseController extends Controller
 
     public function annoter(Request $request, Analyse $analyse): JsonResponse
     {
+        if ($response = $this->ensureAnalyseAccess($analyse)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'commentaire_medecin' => 'required|string',
             'date_resultat'       => 'nullable|date',
@@ -124,6 +143,10 @@ class AnalyseController extends Controller
 
     public function destroy(Analyse $analyse): JsonResponse
     {
+        if ($response = $this->ensureAnalyseAccess($analyse)) {
+            return $response;
+        }
+
         if (!empty($analyse->fichier)) {
             Storage::disk('public')->delete($analyse->fichier);
         }
@@ -135,6 +158,8 @@ class AnalyseController extends Controller
     // Médecin prescrit une analyse depuis une consultation (pas de fichier)
     public function prescrire(Request $request): JsonResponse
     {
+        $cabinetId = $this->tokenCabinetId();
+
         $validated = $request->validate([
             'consultation_id' => 'required|integer|exists:consultations,id',
             'type_analyse'    => 'nullable|string|max:500',
@@ -147,6 +172,10 @@ class AnalyseController extends Controller
 
         // Récupère le patient depuis la consultation
         $consultation = Consultation::with('patient.user')->findOrFail($validated['consultation_id']);
+
+        if ($cabinetId && $consultation->admin?->user?->cabinet_id !== $cabinetId) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
 
         $groupId = $validated['group_id'] ?? (string) Str::uuid();
         $shouldNotifyPatient = $validated['notify_patient'] ?? true;
@@ -200,6 +229,10 @@ public function attachFichier(Request $request, Analyse $analyse): JsonResponse
         $patientId = optional($user->patient)->id;
         if ((int) $analyse->patient_id !== (int) $patientId) {
             return response()->json(['message' => 'Accès refusé.'], 403);
+        }
+    } elseif ($user?->isMedecin()) {
+        if ($response = $this->ensureAnalyseAccess($analyse)) {
+            return $response;
         }
     }
 
@@ -319,5 +352,56 @@ public function attachFichier(Request $request, Analyse $analyse): JsonResponse
             : null;
 
         return $analyse;
+    }
+
+    private function ensureConsultationAccess(Consultation $consultation): ?JsonResponse
+    {
+        $user = auth('api')->user();
+
+        if ($user?->isPatient()) {
+            if ((int) optional($user->patient)->id !== (int) $consultation->patient_id) {
+                return response()->json(['message' => 'Non autorisé.'], 403);
+            }
+
+            return null;
+        }
+
+        $cabinetId = $this->tokenCabinetId();
+        if (!$cabinetId || !$consultation->admin?->user || (int) $consultation->admin->user->cabinet_id !== (int) $cabinetId) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        return null;
+    }
+
+    private function ensureAnalyseAccess(Analyse $analyse): ?JsonResponse
+    {
+        $user = auth('api')->user();
+
+        if ($user?->isPatient()) {
+            if ((int) optional($user->patient)->id !== (int) $analyse->patient_id) {
+                return response()->json(['message' => 'Non autorisé.'], 403);
+            }
+
+            return null;
+        }
+
+        $cabinetId = $this->tokenCabinetId();
+        if (!$cabinetId) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        if ($analyse->consultation?->admin?->user?->cabinet_id === $cabinetId) {
+            return null;
+        }
+
+        if ($analyse->consultation_id) {
+            $consultation = Consultation::with('admin.user')->find($analyse->consultation_id);
+            if ($consultation?->admin?->user?->cabinet_id === $cabinetId) {
+                return null;
+            }
+        }
+
+        return response()->json(['message' => 'Non autorisé.'], 403);
     }
 }

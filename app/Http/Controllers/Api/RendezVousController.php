@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\Concerns\ResolvesCabinetContext;
 use App\Models\Admin;
+use App\Models\Cabinet;
 use App\Models\Disponibilite;
 use App\Models\RendezVous;
 use App\Models\Notification;
@@ -13,6 +15,8 @@ use Illuminate\Http\Request;
 
 class RendezVousController extends Controller
 {
+    use ResolvesCabinetContext;
+
     public function index(Request $request): JsonResponse
     {
         $user = auth('api')->user();
@@ -40,9 +44,21 @@ class RendezVousController extends Controller
         }
 
         if ($user->isMedecin()) {
-            $query->where('admin_id', $user->admin->id);
+            $cabinetId = $this->tokenCabinetId();
+            if ($cabinetId) {
+                $query->whereHas('admin.user', function ($builder) use ($cabinetId) {
+                    $builder->where('cabinet_id', $cabinetId);
+                });
+            }
         } elseif ($user->isPatient()) {
             $query->where('patient_id', $user->patient->id);
+        } elseif ($user->isSecretaire()) {
+            $cabinetId = $this->tokenCabinetId();
+            if ($cabinetId) {
+                $query->whereHas('admin.user', function ($builder) use ($cabinetId) {
+                    $builder->where('cabinet_id', $cabinetId);
+                });
+            }
         }
 
         $rendezvous = $query->orderBy($sortBy, $sortDir)->paginate($perPage);
@@ -145,8 +161,83 @@ class RendezVousController extends Controller
         return response()->json($rendezvous, 201);
     }
 
+    public function appointmentStore(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        $validated = $request->validate([
+            'cabinet_id' => 'required|integer|exists:cabinets,id',
+            'patient_id' => 'nullable|integer|exists:patients,id',
+            'date' => 'required|date',
+            'heure' => 'required|date_format:H:i',
+            'motif' => 'nullable|string|max:255',
+        ]);
+
+        $cabinet = Cabinet::with('doctor.admin')->findOrFail($validated['cabinet_id']);
+        $adminId = $cabinet->doctor?->admin?->id;
+
+        if (!$adminId) {
+            return response()->json(['message' => 'Cabinet invalide.'], 422);
+        }
+
+        $patientId = $validated['patient_id'] ?? null;
+        if ($user->isPatient()) {
+            $patientId = optional($user->patient)->id;
+        }
+
+        if (!$patientId) {
+            return response()->json(['message' => 'Le patient doit être précisé.'], 422);
+        }
+
+        $dateHeure = Carbon::createFromFormat('Y-m-d H:i', $validated['date'] . ' ' . $validated['heure']);
+
+        $conflict = RendezVous::where('admin_id', $adminId)
+            ->where('date_heure', $dateHeure)
+            ->where('statut', '!=', 'annule')
+            ->exists();
+
+        if ($conflict) {
+            return response()->json(['message' => 'Ce créneau est déjà réservé.'], 409);
+        }
+
+        $rendezvous = RendezVous::create([
+            'patient_id' => $patientId,
+            'admin_id' => $adminId,
+            'date_heure' => $dateHeure,
+            'motif' => $validated['motif'] ?? null,
+            'duree_minutes' => 30,
+            'statut' => 'en_attente',
+        ]);
+
+        $rendezvous->load(['patient.user', 'admin.user']);
+
+        return response()->json(['data' => $this->formatAppointment($rendezvous)], 201);
+    }
+
+    public function patientAppointments(): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        if (!$user->isPatient()) {
+            return response()->json([], 200);
+        }
+
+        $appointments = RendezVous::with(['patient.user', 'admin.user'])
+            ->where('patient_id', $user->patient->id)
+            ->orderByDesc('date_heure')
+            ->get()
+            ->map(fn (RendezVous $rendezVous) => $this->formatAppointment($rendezVous))
+            ->values();
+
+        return response()->json($appointments, 200);
+    }
+
     public function update(Request $request, RendezVous $rendezvous): JsonResponse
     {
+        if ($response = $this->ensureRdvAccess($rendezvous)) {
+            return $response;
+        }
+
         $validated = $request->validate([
             'date_heure'    => 'nullable|date|after:now',
             'motif'         => 'nullable|string|max:255',
@@ -182,6 +273,10 @@ class RendezVousController extends Controller
 
     public function show(RendezVous $rendezvous): JsonResponse
     {
+        if ($response = $this->ensureRdvAccess($rendezvous)) {
+            return $response;
+        }
+
         $rendezvous->load(['patient.user', 'admin.user', 'consultation']);
 
         return response()->json($rendezvous, 200);
@@ -189,6 +284,10 @@ class RendezVousController extends Controller
 
     public function annuler(RendezVous $rendezvous): JsonResponse
     {
+        if ($response = $this->ensureRdvAccess($rendezvous)) {
+            return $response;
+        }
+
         if ($rendezvous->statut === 'annule' || $rendezvous->statut === 'termine') {
             return response()->json(['message' => 'Impossible d\'annuler ce rendez-vous.'], 422);
         }
@@ -201,6 +300,10 @@ class RendezVousController extends Controller
     // ← ADD THIS METHOD
     public function reprendre(RendezVous $rendezvous): JsonResponse
     {
+        if ($response = $this->ensureRdvAccess($rendezvous)) {
+            return $response;
+        }
+
         if ($rendezvous->statut !== 'annule') {
             return response()->json(['message' => 'Seuls les rendez-vous annulés peuvent être repris.'], 422);
         }
@@ -270,4 +373,45 @@ class RendezVousController extends Controller
         'data' => $rendezvous
     ], 200);
 }
+
+    private function ensureRdvAccess(RendezVous $rendezvous): ?JsonResponse
+    {
+        $user = auth('api')->user();
+
+        if ($user?->isPatient()) {
+            if ((int) optional($user->patient)->id !== (int) $rendezvous->patient_id) {
+                return response()->json(['message' => 'Non autorisé.'], 403);
+            }
+
+            return null;
+        }
+
+        $cabinetId = $this->tokenCabinetId();
+        if (!$cabinetId || !$rendezvous->admin?->user || (int) $rendezvous->admin->user->cabinet_id !== (int) $cabinetId) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        return null;
+    }
+
+    private function formatAppointment(RendezVous $rendezvous): array
+    {
+        return [
+            'id' => $rendezvous->id,
+            'patient_id' => $rendezvous->patient_id,
+            'cabinet_id' => $rendezvous->admin?->user?->cabinet_id,
+            'date' => optional($rendezvous->date_heure)->toDateString(),
+            'heure' => optional($rendezvous->date_heure)->format('H:i'),
+            'motif' => $rendezvous->motif,
+            'statut' => match ($rendezvous->statut) {
+                'en_attente' => 'pending',
+                'confirme' => 'confirmed',
+                'annule' => 'cancelled',
+                default => $rendezvous->statut,
+            },
+            'created_at' => $rendezvous->created_at,
+            'patient' => $rendezvous->patient?->user,
+            'doctor' => $rendezvous->admin?->user,
+        ];
+    }
 }

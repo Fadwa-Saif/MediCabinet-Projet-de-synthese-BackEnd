@@ -39,7 +39,16 @@ class User extends Authenticatable implements JWTSubject
 
     public function getJWTCustomClaims(): array
     {
-        return [];
+        $cabinetId = $this->cabinet_id;
+
+        if ($cabinetId === null && $this->relationLoaded('cabinet') && $this->cabinet) {
+            $cabinetId = $this->cabinet->id;
+        }
+
+        return [
+            'cabinet_id' => $cabinetId,
+            'role' => $this->admin?->role ?? 'patient',
+        ];
     }
 
     // ── Relations ────────────────────────────────────────────────────────
