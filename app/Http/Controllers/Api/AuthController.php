@@ -20,7 +20,10 @@ class AuthController extends Controller
 {
     public function register(Request $request): JsonResponse
     {
-        $validated = $request->validate([
+        $role = $this->normalizeRole($request->input('role') ?? 'patient');
+
+        // Build validation rules based on role
+        $rules = [
             'role' => 'nullable|string|in:patient,medecin,secretaire,doctor,secretary',
             'nom' => 'required|string|max:50',
             'prenom' => 'required|string|max:50',
@@ -32,17 +35,30 @@ class AuthController extends Controller
             'adresse' => 'nullable|string',
             'ville' => 'nullable|string|max:100',
             'specialite' => 'nullable|string|max:120',
-            // `cabinet_id` or `medecin_id` is required for secretaries, but not both.
-            'cabinet_id' => 'nullable|exists:cabinets,id|required_if:role,secretaire|required_without:medecin_id',
-            'medecin_id' => 'nullable|exists:users,id|required_if:role,secretaire|required_without:cabinet_id',
             'cabinet' => 'nullable|array',
             'cabinet.nom' => 'nullable|string|max:150',
             'cabinet.adresse' => 'nullable|string',
             'cabinet.ville' => 'nullable|string|max:100',
             'cabinet.specialite' => 'nullable|string|max:120',
+            'cabinet_id' => 'nullable|exists:cabinets,id',
+            'medecin_id' => 'nullable|exists:users,id',
+        ];
+
+        // Only require cabinet_id or medecin_id for secretaries
+        if ($role === 'secretaire') {
+            $rules['cabinet_id'] = 'nullable|exists:cabinets,id|required_without:medecin_id';
+            $rules['medecin_id'] = 'nullable|exists:users,id|required_without:cabinet_id';
+        }
+
+        \Log::info('Registration attempt', [
+            'role' => $role,
+            'request_role' => $request->input('role'),
+            'cabinet_id' => $request->input('cabinet_id'),
+            'medecin_id' => $request->input('medecin_id'),
+            'rules_for_role' => $role === 'secretaire' ? 'secretaire (required_without)' : 'patient/medecin (nullable)',
         ]);
 
-        $role = $this->normalizeRole($validated['role'] ?? 'patient');
+        $validated = $request->validate($rules);
 
         return DB::transaction(function () use ($validated, $role) {
             $user = User::create([
