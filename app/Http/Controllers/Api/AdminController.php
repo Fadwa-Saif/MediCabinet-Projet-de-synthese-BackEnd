@@ -83,7 +83,7 @@ class AdminController extends Controller
     public function listMedecins(): JsonResponse
     {
         $medecins = Admin::where('role', 'medecin')
-            ->with(['user', 'disponibilites'])
+            ->with(['user.cabinet', 'disponibilites'])
             ->get()
             ->map(function ($medecin) {
                 return [
@@ -95,6 +95,9 @@ class AdminController extends Controller
                     'photo_profil' => $medecin->user->photo_profil,
                     'matricule' => $medecin->matricule,
                     'biographie' => $medecin->biographie,
+                    'specialite' => $medecin->user->cabinet?->specialite,
+                    'cabinet_nom' => $medecin->user->cabinet?->nom,
+                    'cabinet_ville' => $medecin->user->cabinet?->ville,
                 ];
             });
 
