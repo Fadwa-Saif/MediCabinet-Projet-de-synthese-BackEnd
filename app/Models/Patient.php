@@ -53,6 +53,13 @@ class Patient extends Model
         return $this->hasMany(Consultation::class);
     }
 
+    public function medecins(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Admin::class, 'patient_medecin', 'patient_id', 'medecin_id')
+            ->withPivot('date_affectation', 'statut')
+            ->withTimestamps();
+    }
+
     public function getAgeAttribute(): ?int
     {
         return $this->date_naissance?->age;

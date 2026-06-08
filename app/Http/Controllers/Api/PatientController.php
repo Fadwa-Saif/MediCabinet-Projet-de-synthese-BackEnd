@@ -14,14 +14,30 @@ class PatientController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $user = auth('api')->user();
         $query = Patient::with('user');
 
+        // Filter by search
         if ($request->has('search')) {
             $search = $request->input('search');
             $query->whereHas('user', function ($q) use ($search) {
                 $q->where('nom', 'like', "%{$search}%")
                   ->orWhere('prenom', 'like', "%{$search}%")
                   ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Filter by role
+        if ($user->isMedecin()) {
+            // Medecin only sees patients assigned to them
+            $query->whereHas('medecins', function ($q) use ($user) {
+                $q->where('medecin_id', $user->admin->id)
+                  ->where('statut', 'actif');
+            });
+        } elseif ($user->isSecretaire()) {
+            // Secretaire only sees patients in their cabinet
+            $query->whereHas('user', function ($q) use ($user) {
+                $q->where('cabinet_id', $user->cabinet_id);
             });
         }
 
@@ -171,5 +187,37 @@ class PatientController extends Controller
         $patient->user->refresh();
 
         return response()->json(['user' => $patient->user], 200);
+    }
+
+    public function mesPatients(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        if (!$user->isMedecin()) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        $query = Patient::with('user')
+            ->whereHas('medecins', function ($q) use ($user) {
+                $q->where('medecin_id', $user->admin->id)
+                  ->where('statut', 'actif');
+            });
+
+        // Optional search filter
+        if ($request->has('search')) {
+            $search = $request->input('search');
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('nom', 'like', "%{$search}%")
+                  ->orWhere('prenom', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+        $perPage = max(1, min($perPage, 100));
+
+        $patients = $query->paginate($perPage);
+
+        return response()->json($patients, 200);
     }
 }

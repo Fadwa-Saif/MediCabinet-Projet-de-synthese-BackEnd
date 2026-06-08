@@ -65,7 +65,15 @@ class RendezVousController extends Controller
             ->first();
 
         if (!$disponibilite) {
-            return response()->json(['creneaux' => []], 200);
+            $disponibilite = new Disponibilite([
+                'admin_id' => $validated['admin_id'],
+                'jour_semaine' => $dayOfWeek,
+                'heure_debut' => '09:00:00',
+                'heure_fin' => '17:00:00',
+                'duree_min' => 30,
+                'est_disponible' => true,
+                'date_exception' => null,
+            ]);
         }
 
         $creneauxDisponibles = $disponibilite->getCreneaux();
@@ -141,6 +149,22 @@ class RendezVousController extends Controller
             'duree_minutes' => $validated['duree_minutes'],
             'statut' => 'en_attente',
         ]);
+
+        // Auto-assign patient to doctor if not already assigned
+        $patient = RendezVous::find($rendezvous->id)->patient;
+        if ($patient) {
+            $existingAssignment = $patient->medecins()
+                ->where('medecin_id', $adminId)
+                ->where('statut', 'actif')
+                ->exists();
+
+            if (!$existingAssignment) {
+                $patient->medecins()->attach($adminId, [
+                    'date_affectation' => now(),
+                    'statut' => 'actif',
+                ]);
+            }
+        }
 
         return response()->json($rendezvous, 201);
     }

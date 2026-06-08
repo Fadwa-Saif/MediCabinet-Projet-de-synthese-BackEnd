@@ -19,7 +19,28 @@ class DisponibiliteController extends Controller
             ->orderByRaw("FIELD(jour_semaine, 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam')")
             ->get();
 
+        if ($disponibilites->isEmpty()) {
+            return response()->json($this->defaultDisponibilites(), 200);
+        }
+
         return response()->json($disponibilites, 200);
+    }
+
+    private function defaultDisponibilites(): array
+    {
+        $jours = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
+
+        return array_map(function (string $jour) {
+            return [
+                'admin_id' => null,
+                'jour_semaine' => $jour,
+                'heure_debut' => '09:00:00',
+                'heure_fin' => '17:00:00',
+                'duree_min' => 30,
+                'est_disponible' => true,
+                'date_exception' => null,
+            ];
+        }, $jours);
     }
 
     public function sync(Request $request): JsonResponse

@@ -79,4 +79,25 @@ class AdminController extends Controller
 
         return response()->json($data, 200);
     }
+
+    public function listMedecins(): JsonResponse
+    {
+        $medecins = Admin::where('role', 'medecin')
+            ->with(['user', 'disponibilites'])
+            ->get()
+            ->map(function ($medecin) {
+                return [
+                    'id' => $medecin->id,
+                    'nom' => $medecin->user->nom,
+                    'prenom' => $medecin->user->prenom,
+                    'email' => $medecin->user->email,
+                    'telephone' => $medecin->user->telephone,
+                    'photo_profil' => $medecin->user->photo_profil,
+                    'matricule' => $medecin->matricule,
+                    'biographie' => $medecin->biographie,
+                ];
+            });
+
+        return response()->json($medecins, 200);
+    }
 }

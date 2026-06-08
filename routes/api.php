@@ -67,17 +67,15 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
 
 // ── Multi-Role Endpoints ───────────────────────────────────────────────
 Route::middleware('role:medecin,secretaire')->group(function () {
-    Route::get('patients',                                [PatientController::class, 'index']);
-    Route::post('patients',                               [PatientController::class, 'store']);
     Route::patch('rendezvous/{rendezvous}',               [RendezVousController::class, 'update']);
     Route::post('rendezvous/book',                        [RendezVousController::class, 'store']); // Use a specific alias or identical path
 });
 
 Route::middleware('role:patient,secretaire')->group(function () {
     Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
-    Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']); 
-    // Allow patients to update their pending appointments
-    //Route::patch('rendezvous/{rendezvous}', [RendezVousController::class, 'updatePatient']);
+    Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']);
+    // Allow patients to update their own pending appointments
+    Route::patch('rendezvous/{rendezvous}/patient', [RendezVousController::class, 'updatePatient']);
 });
 
 Route::middleware('role:patient,medecin')->group(function () {
@@ -105,10 +103,13 @@ Route::middleware('role:patient,medecin')->group(function () {
 
 // ── Médecin ───────────────────────────────────────────────────────────
 Route::middleware('role:medecin,secretaire')->group(function () {
+    Route::get('patients',                                [PatientController::class, 'index']);
+    Route::post('patients',                               [PatientController::class, 'store']);
     Route::patch('patients/{patient}',                    [PatientController::class, 'update']);
 });
 
 Route::middleware('role:medecin')->group(function () {
+    Route::get('mes-patients',                            [PatientController::class, 'mesPatients']);
     Route::get('patients/{patientId}/historique',         [ConsultationController::class, 'historique']);
 
     Route::post('consultations',                          [ConsultationController::class, 'store']);
@@ -133,8 +134,7 @@ Route::middleware('role:medecin')->group(function () {
 });
 
 // ── Patient ───────────────────────────────────────────────────────────
-Route::middleware('role:patient')->group(function () {
-    Route::post('rendezvous',                             [RendezVousController::class, 'store']);
+Route::middleware('role:patient')->group(function () {    Route::get('medecins',                                [AdminController::class, 'listMedecins']);    Route::post('rendezvous',                             [RendezVousController::class, 'store']);
     Route::post('analyses',                               [AnalyseController::class, 'store']);
     Route::patch('patients/{patient}/profil',             [PatientController::class, 'updateProfil']);
     

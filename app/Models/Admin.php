@@ -43,6 +43,13 @@ class Admin extends Model
         return $this->hasMany(Ordonnance::class);
     }
 
+    public function patients(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Patient::class, 'patient_medecin', 'medecin_id', 'patient_id')
+            ->withPivot('date_affectation', 'statut')
+            ->withTimestamps();
+    }
+
     public function isMedecin(): bool
     {
         return $this->role === 'medecin';

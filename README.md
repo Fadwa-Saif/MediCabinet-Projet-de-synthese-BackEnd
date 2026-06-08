@@ -1,53 +1,401 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🏥 MediCabinet Backend API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+**Laravel 11 Medical Cabinet Management System**
 
-## About Laravel
+> A comprehensive backend API for managing medical practices with patient-doctor assignments, appointments, consultations, and medical records.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## 📋 Table of Contents
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1. [Quick Start](#quick-start)
+2. [Recent Features](#recent-features)
+3. [API Documentation](#api-documentation)
+4. [Project Structure](#project-structure)
+5. [Development Guide](#development-guide)
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## 🚀 Quick Start
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### Prerequisites
+- PHP 8.2+
+- Composer
+- MySQL/MariaDB
+- JWT (tymon/jwt-auth configured)
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Installation
 
-## Laravel Sponsors
+```bash
+# 1. Install dependencies
+composer install
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# 2. Copy environment file
+cp .env.example .env
 
-### Premium Partners
+# 3. Generate application key
+php artisan key:generate
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+# 4. Configure database in .env
+# DB_CONNECTION=mysql
+# DB_HOST=127.0.0.1
+# DB_DATABASE=medicabinet
+# DB_USERNAME=root
+# DB_PASSWORD=
+
+# 5. Run migrations
+php artisan migrate
+
+# 6. Seed sample data (optional)
+php artisan db:seed
+
+# 7. Start development server
+php artisan serve
+
+# API will be available at http://127.0.0.1:8000/api
+```
+
+---
+
+## ✨ Recent Features (2026-06-07)
+
+### Patient-Doctor Assignment System
+
+A new system for automatic patient assignment to doctors with role-based visibility control:
+
+#### **Features Implemented**:
+- ✅ Automatic patient assignment when booking appointments
+- ✅ Pivot table `patient_medecin` for many-to-many relationships
+- ✅ Role-based patient filtering (medecin, secretaire, patient)
+- ✅ PatientPolicy for fine-grained authorization
+- ✅ New endpoints: `GET /api/medecins`, `GET /api/mes-patients`
+
+#### **New Endpoints**:
+```
+GET  /api/medecins              # List available doctors
+GET  /api/mes-patients          # Doctor's assigned patients
+POST /api/rendezvous            # Book appointment (auto-assigns)
+PATCH /api/rendezvous/{id}       # Patient: update own pending appointment
+```
+
+#### **Modified Endpoints**:
+```
+GET  /api/patients              # Now filtered by role
+```
+
+**→ See [PATIENT_DOCTOR_ASSIGNMENT_README.md](../PATIENT_DOCTOR_ASSIGNMENT_README.md) for detailed documentation**
+
+---
+
+## 🔌 API Documentation
+
+### Authentication
+All endpoints (except public routes) require JWT token:
+
+```bash
+# Login
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password"
+}
+
+# Response
+{
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "bearer",
+  "user": { ... }
+}
+
+# Use token in requests
+Authorization: Bearer {token}
+```
+
+### Core Endpoints
+
+#### **Appointments** (`/api/rendezvous`)
+```
+GET    /api/rendezvous                     # List appointments
+POST   /api/rendezvous                     # Create appointment
+GET    /api/rendezvous/{id}                # Get appointment details
+PATCH  /api/rendezvous/{id}                # Update appointment
+PATCH  /api/rendezvous/{id}/annuler        # Cancel appointment
+PATCH  /api/rendezvous/{id}/reprendre      # Resume appointment
+GET    /api/rendezvous/creneaux            # Get available time slots
+```
+
+#### **Patients** (`/api/patients`)
+```
+GET    /api/patients                       # List patients (filtered by role)
+POST   /api/patients                       # Create patient
+GET    /api/patients/{id}                  # Get patient details
+PATCH  /api/patients/{id}                  # Update patient
+DELETE /api/patients/{id}                  # Delete patient
+GET    /api/mes-patients                   # Doctor: list assigned patients
+```
+
+#### **Consultations** (`/api/consultations`)
+```
+GET    /api/consultations                  # List consultations
+POST   /api/consultations                  # Create consultation
+GET    /api/consultations/{id}             # Get consultation details
+PATCH  /api/consultations/{id}             # Update consultation
+GET    /api/patients/{id}/historique       # Patient consultation history
+```
+
+#### **Doctors** (`/api/medecins`)
+```
+GET    /api/medecins                       # List available doctors
+```
+
+**→ See [docs/MediCabinet-API.postman_collection.json](docs/MediCabinet-API.postman_collection.json) for complete API specification**
+
+---
+
+## 📁 Project Structure
+
+```
+app/
+├── Http/
+│   ├── Controllers/Api/
+│   │   ├── AppointmentController.php
+│   │   ├── AdminController.php           (NEW: listMedecins)
+│   │   ├── PatientController.php         (MODIFIED: mesPatients)
+│   │   ├── ConsultationController.php
+│   │   ├── RendezVousController.php      (MODIFIED: auto-assignment)
+│   │   └── ...
+│   ├── Middleware/
+│   │   └── RoleMiddleware.php            (Role-based access control)
+│   └── Resources/
+├── Models/
+│   ├── User.php
+│   ├── Patient.php                       (MODIFIED: medecins relation)
+│   ├── Admin.php                         (MODIFIED: patients relation)
+│   ├── RendezVous.php
+│   ├── Consultation.php
+│   └── ...
+├── Policies/
+│   └── PatientPolicy.php                 (NEW: Authorization rules)
+└── Providers/
+    ├── AppServiceProvider.php
+    └── AuthServiceProvider.php           (NEW: Policy registration)
+
+database/
+├── migrations/
+│   ├── ...
+│   └── 2026_06_07_000019_create_patient_medecin_table.php (NEW)
+└── seeders/
+    └── DatabaseSeeder.php
+
+routes/
+├── api.php                               (MODIFIED: New routes & groups)
+├── web.php
+└── console.php
+
+config/
+├── auth.php                              (JWT configured)
+├── database.php
+└── ...
+```
+
+---
+
+## 👥 User Roles & Permissions
+
+### Roles
+- **patient**: Booke appointments, view own medical records
+- **medecin**: Manage appointments, consultations, patients, prescriptions
+- **secretaire**: Create patients, manage appointments (for cabinet)
+- **admin**: System administration (implied medecin role)
+
+### Access Control
+- **PatientPolicy**: Enforces who can view/edit patient records
+- **RoleMiddleware**: Validates role requirements on routes
+- **Gate policies**: Model-level authorization
+
+---
+
+## 🧪 Development Guide
+
+### Running Tests
+```bash
+php artisan test
+```
+
+### Database Migrations
+```bash
+# Run all pending migrations
+php artisan migrate
+
+# Rollback last batch
+php artisan migrate:rollback
+
+# Create new migration
+php artisan make:migration create_table_name_table
+```
+
+### Tinker (Interactive Shell)
+```bash
+php artisan tinker
+
+# Example: Create a test patient
+>>> $user = User::factory()->create();
+>>> $patient = Patient::create(['user_id' => $user->id, ...]);
+```
+
+### Common Commands
+```bash
+# Seed database
+php artisan db:seed
+
+# Clear cache
+php artisan cache:clear
+
+# Refresh migrations + seed
+php artisan migrate:fresh --seed
+
+# Generate JWT secret
+php artisan jwt:secret
+```
+
+---
+
+## 🔐 Security Considerations
+
+✅ **JWT Authentication**: All routes protected with JWT tokens
+✅ **Role-Based Access Control**: RoleMiddleware validates user roles
+✅ **Model Policies**: PatientPolicy enforces fine-grained permissions
+✅ **Input Validation**: All requests validated with FormRequest
+✅ **CORS Configured**: `config/cors.php` allows frontend communication
+✅ **Password Hashing**: Passwords hashed with bcrypt
+✅ **Authorization**: Gate policies at model level
+
+### CORS Configuration
+Frontend should be added to allowed origins in `config/cors.php`:
+```php
+'allowed_origins' => [
+    'http://localhost:3001',
+    'http://127.0.0.1:3001',
+    'https://medicabinet-frontend.domain.com',
+],
+```
+
+---
+
+## 📊 Database Schema Highlights
+
+### Key Tables
+- `users`: User accounts with cabinet association
+- `admins`: Doctor/Secretary designation
+- `patients`: Medical patient records
+- `patient_medecin`: **Patient-Doctor assignments** (pivot table) ← NEW
+- `rendezvous`: Appointments
+- `consultations`: Medical visits
+- `cabinets`: Medical practices
+- `disponibilites`: Doctor working hours
+- `ordonnances`: Prescriptions
+- `medicaments`: Medicine catalog
+- `analyses`: Medical tests/analyses
+
+### Recent Schema Changes (2026-06-07)
+```sql
+-- NEW: Pivot table for patient-doctor assignments
+CREATE TABLE patient_medecin (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    patient_id BIGINT NOT NULL,
+    medecin_id BIGINT NOT NULL,
+    date_affectation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    statut ENUM('actif', 'inactif') DEFAULT 'actif',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (medecin_id) REFERENCES admins(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_assignment (patient_id, medecin_id)
+);
+```
+
+---
+
+## 📝 Configuration Files
+
+### `.env` (Important Settings)
+```env
+# App
+APP_NAME="MediCabinet"
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://127.0.0.1:8000
+
+# Database
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=medicabinet
+DB_USERNAME=root
+DB_PASSWORD=
+
+# JWT
+JWT_SECRET=<generated-by-jwt:secret>
+JWT_ALGORITHM=HS256
+
+# CORS Frontend
+APP_FRONTEND_URL=http://localhost:3001
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### PHP Extensions
+If Composer fails with `ext-sodium` error:
+- Edit `C:\xampp\php\php.ini` and enable: `extension=php_sodium.dll`
+- Restart PHP/Apache
+
+### JWT Token Issues
+```bash
+# Regenerate JWT secret
+php artisan jwt:secret
+
+# Clear application cache
+php artisan cache:clear
+php artisan config:clear
+```
+
+### Database Connection
+```bash
+# Test database connection
+php artisan tinker
+>>> DB::connection()->getPdo();  # Should return PDO object
+```
+
+---
+
+## 📚 Additional Resources
+
+- [Laravel Documentation](https://laravel.com/docs)
+- [Eloquent ORM Guide](https://laravel.com/docs/eloquent)
+- [JWT Auth Package](https://jwt-auth.readthedocs.io/)
+- [Project Analysis Report](../Rapport-Analyse-MediCabinet.md)
+
+---
+
+## 👥 Team & Contributing
+
+**Last Updated**: 2026-06-07
+**Version**: 2.1.0
+**Status**: 🟢 Active Development
+
+### Recent Changes
+- ✅ Added Patient-Doctor Assignment System (2026-06-07)
+- ✅ Implemented PatientPolicy for authorization
+- ✅ Added role-based patient filtering
+- ✅ Auto-assignment on appointment creation
+
+---
+
+**For Frontend Setup**: See [../MediCabinet-Projet-de-synthese-FrontEnd/README.md](../MediCabinet-Projet-de-synthese-FrontEnd/README.md)
 
 ## Contributing
 
