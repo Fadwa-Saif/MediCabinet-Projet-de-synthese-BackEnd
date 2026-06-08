@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Patient;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -35,15 +36,31 @@ class PatientController extends Controller
                   ->where('statut', 'actif');
             });
         } elseif ($user->isSecretaire()) {
-            // Secretaire only sees patients in their cabinet
-            $query->whereHas('user', function ($q) use ($user) {
-                $q->where('cabinet_id', $user->cabinet_id);
-            });
+            $doctorUserId = $user->secretaryRequest?->medecin_id;
+            $doctorAdminId = $doctorUserId ? User::find($doctorUserId)?->admin?->id : null;
+
+            if ($doctorAdminId) {
+                $query->where(function ($q) use ($doctorAdminId) {
+                    $q->whereHas('medecins', function ($subQuery) use ($doctorAdminId) {
+                        $subQuery->where('medecin_id', $doctorAdminId);
+                    })
+                    ->orWhereHas('rendezVous', function ($subQuery) use ($doctorAdminId) {
+                        $subQuery->where('admin_id', $doctorAdminId);
+                    });
+                });
+            } else {
+                $query->whereRaw('0 = 1');
+            }
         }
 
         $patients = $query->paginate(15);
 
         return response()->json($patients, 200);
+    }
+
+    public function secretaryPatients(Request $request): JsonResponse
+    {
+        return $this->index($request);
     }
 
     public function store(Request $request): JsonResponse
@@ -114,6 +131,8 @@ class PatientController extends Controller
 
     public function show(Patient $patient): JsonResponse
     {
+        $this->authorize('view', $patient);
+
         $patient->load([
             'user',
             'rendezVous.admin.user',
@@ -144,6 +163,7 @@ class PatientController extends Controller
 
         $validated['dossier_updated_at'] = now();
 
+        $this->authorize('update', $patient);
         $patient->update($validated);
 
         return response()->json($patient, 200);
@@ -151,6 +171,7 @@ class PatientController extends Controller
 
     public function destroy(Patient $patient): JsonResponse
     {
+        $this->authorize('delete', $patient);
         $patient->user->delete();
 
         return response()->json(['message' => 'Patient supprimé avec succès.'], 200);

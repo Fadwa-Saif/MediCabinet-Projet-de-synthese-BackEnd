@@ -8,6 +8,7 @@ use App\Models\Analyse;
 use App\Models\Consultation;
 use App\Models\Patient;
 use App\Models\RendezVous;
+use App\Models\SecretaryMedecin;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,6 +76,7 @@ class AdminController extends Controller
                 ->whereMonth('date', now()->month)
                 ->count(),
             'analyses_en_attente' => Analyse::whereNull('date_resultat')->count(),
+            'secretary_requests_en_attente' => SecretaryMedecin::where('statut', 'en_attente')->count(),
         ];
 
         return response()->json($data, 200);
@@ -102,5 +104,155 @@ class AdminController extends Controller
             });
 
         return response()->json($medecins, 200);
+    }
+
+    public function secretaryRequests(Request $request): JsonResponse
+    {
+        $medecin = auth('api')->user();
+
+        $query = SecretaryMedecin::with(['secretary.cabinet'])
+            ->where('medecin_id', $medecin->id);
+
+        if ($status = $request->query('statut')) {
+            if ($status !== 'tous') {
+                $query->where('statut', $status);
+            }
+        }
+
+        $requests = $query->orderByDesc('date_demande')->get()->map(function (SecretaryMedecin $request) {
+            return [
+                'id' => $request->id,
+                'secretary_id' => $request->secretary_id,
+                'secretary_nom' => $request->secretary?->nom,
+                'secretary_prenom' => $request->secretary?->prenom,
+                'secretary_email' => $request->secretary?->email,
+                'secretary_telephone' => $request->secretary?->telephone,
+                'cabinet_id' => $request->secretary?->cabinet_id,
+                'cabinet_nom' => $request->secretary?->cabinet?->nom,
+                'cabinet_ville' => $request->secretary?->cabinet?->ville,
+                'statut' => $request->statut,
+                'date_demande' => $request->date_demande,
+                'date_decision' => $request->date_decision,
+                'motif_refus' => $request->motif_refus,
+            ];
+        });
+
+        $counts = SecretaryMedecin::where('medecin_id', $medecin->id)
+            ->selectRaw('statut, count(*) as total')
+            ->groupBy('statut')
+            ->pluck('total', 'statut');
+
+        return response()->json([
+            'requests' => $requests,
+            'counts' => [
+                'en_attente' => $counts['en_attente'] ?? 0,
+                'approuvee' => $counts['approuvee'] ?? 0,
+                'refusee' => $counts['refusee'] ?? 0,
+            ],
+        ], 200);
+    }
+
+    public function updateSecretaryRequest(Request $request, $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'statut' => 'required|in:approuvee,refusee',
+            'motif_refus' => 'nullable|string|max:1000',
+        ]);
+
+        $secretaryRequest = SecretaryMedecin::with('secretary.admin')
+            ->find($id)
+            ?? SecretaryMedecin::with('secretary.admin')->where('secretary_id', $id)->first();
+
+        if (!$secretaryRequest) {
+            return response()->json(['message' => 'Demande introuvable.'], 404);
+        }
+
+        if (!$secretaryRequest->secretary || !$secretaryRequest->secretary->isSecretaire()) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], 403);
+        }
+
+        $medecin = auth('api')->user();
+        if ($secretaryRequest->medecin_id !== $medecin->id) {
+            return response()->json(['message' => 'Vous n’êtes pas autorisé à gérer cette demande.'], 403);
+        }
+
+        $secretaryRequest->statut = $validated['statut'];
+        $secretaryRequest->date_decision = now();
+        $secretaryRequest->motif_refus = $validated['statut'] === 'refusee'
+            ? $validated['motif_refus']
+            : null;
+        $secretaryRequest->save();
+
+        return response()->json([
+            'message' => 'Statut de la demande mis à jour.',
+            'request' => [
+                'id' => $secretaryRequest->id,
+                'secretary_id' => $secretaryRequest->secretary_id,
+                'medecin_id' => $secretaryRequest->medecin_id,
+                'statut' => $secretaryRequest->statut,
+                'date_decision' => $secretaryRequest->date_decision,
+                'motif_refus' => $secretaryRequest->motif_refus,
+            ],
+        ], 200);
+    }
+
+    public function approveSecretaryRequest($id): JsonResponse
+    {
+        $secretaryRequest = SecretaryMedecin::with('secretary.admin')->find($id);
+
+        if (!$secretaryRequest) {
+            return response()->json(['message' => 'Demande introuvable.'], 404);
+        }
+
+        if (!$secretaryRequest->secretary || !$secretaryRequest->secretary->isSecretaire()) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], 403);
+        }
+
+        $medecin = auth('api')->user();
+        if ($secretaryRequest->medecin_id !== $medecin->id) {
+            return response()->json(['message' => 'Vous n’êtes pas autorisé à gérer cette demande.'], 403);
+        }
+
+        $secretaryRequest->statut = 'approuvee';
+        $secretaryRequest->date_decision = now();
+        $secretaryRequest->motif_refus = null;
+        $secretaryRequest->save();
+
+        return response()->json([
+            'message' => 'Secrétaire approuvée avec succès.',
+            'request' => $secretaryRequest,
+        ], 200);
+    }
+
+    public function refuseSecretaryRequest(Request $request, $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'motif_refus' => 'nullable|string|max:1000',
+        ]);
+
+        $secretaryRequest = SecretaryMedecin::with('secretary.admin')->find($id);
+
+        if (!$secretaryRequest) {
+            return response()->json(['message' => 'Demande introuvable.'], 404);
+        }
+
+        if (!$secretaryRequest->secretary || !$secretaryRequest->secretary->isSecretaire()) {
+            return response()->json(['message' => 'Utilisateur non autorisé.'], 403);
+        }
+
+        $medecin = auth('api')->user();
+        if ($secretaryRequest->medecin_id !== $medecin->id) {
+            return response()->json(['message' => 'Vous n’êtes pas autorisé à gérer cette demande.'], 403);
+        }
+
+        $secretaryRequest->statut = 'refusee';
+        $secretaryRequest->date_decision = now();
+        $secretaryRequest->motif_refus = $validated['motif_refus'] ?? null;
+        $secretaryRequest->save();
+
+        return response()->json([
+            'message' => 'Secrétaire refusée avec succès.',
+            'request' => $secretaryRequest,
+        ], 200);
     }
 }

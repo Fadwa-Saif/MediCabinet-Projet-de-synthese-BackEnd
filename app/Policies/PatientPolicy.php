@@ -35,9 +35,12 @@ class PatientPolicy
                 ->exists();
         }
 
-        // If user is a secretaire, check if patient's cabinet matches their cabinet
+        // If user is a secretaire, check if patient is assigned to their doctor
         if ($user->isSecretaire()) {
-            return $user->cabinet_id === $patient->user?->cabinet_id;
+            return $patient->medecins()
+                ->where('medecin_id', $user->secretaryRequest?->medecin_id)
+                ->where('statut', 'actif')
+                ->exists();
         }
 
         return false;
@@ -61,9 +64,12 @@ class PatientPolicy
             return $user->patient->id === $patient->id;
         }
 
-        // Secretaire can update patients in their cabinet
+        // Secretaire can update patients assigned to their doctor
         if ($user->isSecretaire()) {
-            return $user->cabinet_id === $patient->user?->cabinet_id;
+            return $patient->medecins()
+                ->where('medecin_id', $user->secretaryRequest?->medecin_id)
+                ->where('statut', 'actif')
+                ->exists();
         }
 
         return false;
@@ -74,9 +80,12 @@ class PatientPolicy
      */
     public function delete(User $user, Patient $patient): bool
     {
-        // Only secretaires can delete patients, and only those in their cabinet
+        // Only secretaires can delete patients assigned to their doctor
         if ($user->isSecretaire()) {
-            return $user->cabinet_id === $patient->user?->cabinet_id;
+            return $patient->medecins()
+                ->where('medecin_id', $user->secretaryRequest?->medecin_id)
+                ->where('statut', 'actif')
+                ->exists();
         }
 
         return false;

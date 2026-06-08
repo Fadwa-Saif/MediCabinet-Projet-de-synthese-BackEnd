@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureSecretaryApproved;
 use App\Http\Middleware\RoleMiddleware;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'role' => RoleMiddleware::class,
+            'secretary.approved' => EnsureSecretaryApproved::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Admin;
 use App\Models\Cabinet;
 use App\Models\Patient;
+use App\Models\SecretaryMedecin;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,7 +32,8 @@ class AuthController extends Controller
             'adresse' => 'nullable|string',
             'ville' => 'nullable|string|max:100',
             'specialite' => 'nullable|string|max:120',
-            'cabinet_id' => 'nullable|exists:cabinets,id',
+            'cabinet_id' => 'required_without:medecin_id|nullable|exists:cabinets,id',
+            'medecin_id' => 'required_without:cabinet_id|nullable|exists:users,id',
             'cabinet' => 'nullable|array',
             'cabinet.nom' => 'nullable|string|max:150',
             'cabinet.adresse' => 'nullable|string',
@@ -92,9 +94,23 @@ class AuthController extends Controller
                 $user->load(['admin', 'cabinet']);
                 $profile = $user->admin;
             } elseif ($role === 'secretaire') {
-                if (empty($validated['cabinet_id'])) {
+                $medecin = null;
+
+                if (!empty($validated['medecin_id'])) {
+                    $medecin = User::with('admin', 'cabinet')->find($validated['medecin_id']);
+                } elseif (!empty($validated['cabinet_id'])) {
+                    $cabinet = Cabinet::with('doctor')->find($validated['cabinet_id']);
+                    if (!$cabinet) {
+                        throw ValidationException::withMessages([
+                            'cabinet_id' => 'Cabinet introuvable.',
+                        ]);
+                    }
+                    $medecin = $cabinet->doctor;
+                }
+
+                if (!$medecin || $medecin->admin?->role !== 'medecin') {
                     throw ValidationException::withMessages([
-                        'cabinet_id' => 'Veuillez sélectionner un cabinet existant.',
+                        'medecin_id' => 'Médecin introuvable ou invalide.',
                     ]);
                 }
 
@@ -105,7 +121,14 @@ class AuthController extends Controller
                     'biographie' => null,
                 ]);
 
-                $user->update(['cabinet_id' => $validated['cabinet_id']]);
+                $user->update(['cabinet_id' => $medecin->cabinet?->id ?? $validated['cabinet_id'] ?? null]);
+
+                SecretaryMedecin::create([
+                    'secretary_id' => $user->id,
+                    'medecin_id' => $medecin->id,
+                    'statut' => 'en_attente',
+                ]);
+
                 $user->load(['admin', 'cabinet']);
                 $profile = $user->admin;
             }
@@ -120,6 +143,13 @@ class AuthController extends Controller
                 'profile' => $profile,
                 'role' => $role,
                 'cabinet' => $user->cabinet ?? null,
+                'secretary_request' => $user->secretaryRequest ? [
+                    'id' => $user->secretaryRequest->id,
+                    'statut' => $user->secretaryRequest->statut,
+                    'date_demande' => $user->secretaryRequest->date_demande,
+                    'date_decision' => $user->secretaryRequest->date_decision,
+                    'motif_refus' => $user->secretaryRequest->motif_refus,
+                ] : null,
             ], 201);
         });
     }
@@ -148,7 +178,38 @@ class AuthController extends Controller
             return response()->json(['message' => 'Compte désactivé.'], 403);
         }
 
-        $user->load(['admin', 'patient', 'cabinet']);
+        $user->load(['admin', 'patient', 'cabinet', 'secretaryRequest.medecin']);
+
+        if ($user->isSecretaire()) {
+            if ($user->secretaryRequest?->statut === 'refusee') {
+                auth('api')->logout();
+
+                return response()->json([
+                    'status' => 'refusee',
+                    'message' => 'Votre demande a été refusée.',
+                ], 403);
+            }
+
+            if ($user->secretaryRequest?->statut === 'en_attente') {
+                auth('api')->logout();
+
+                return response()->json([
+                    'status' => 'en_attente',
+                    'redirect' => '/en-attente',
+                    'secretary_request' => [
+                        'id' => $user->secretaryRequest->id,
+                        'statut' => $user->secretaryRequest->statut,
+                        'date_demande' => $user->secretaryRequest->date_demande,
+                        'medecin' => $user->secretaryRequest->medecin ? [
+                            'id' => $user->secretaryRequest->medecin->id,
+                            'nom' => $user->secretaryRequest->medecin->nom,
+                            'prenom' => $user->secretaryRequest->medecin->prenom,
+                            'email' => $user->secretaryRequest->medecin->email,
+                        ] : null,
+                    ],
+                ], 200);
+            }
+        }
 
         $profile = $user->admin ?? $user->patient;
         $role = $user->admin?->role ?? 'patient';
@@ -171,6 +232,19 @@ class AuthController extends Controller
             'profile' => $profile,
             'role' => $role,
             'cabinet' => $user->cabinet,
+            'secretary_request' => $user->secretaryRequest ? [
+                'id' => $user->secretaryRequest->id,
+                'statut' => $user->secretaryRequest->statut,
+                'date_demande' => $user->secretaryRequest->date_demande,
+                'date_decision' => $user->secretaryRequest->date_decision,
+                'motif_refus' => $user->secretaryRequest->motif_refus,
+                'medecin' => $user->secretaryRequest->medecin ? [
+                    'id' => $user->secretaryRequest->medecin->id,
+                    'nom' => $user->secretaryRequest->medecin->nom,
+                    'prenom' => $user->secretaryRequest->medecin->prenom,
+                    'email' => $user->secretaryRequest->medecin->email,
+                ] : null,
+            ] : null,
         ], 200);
     }
 
@@ -194,7 +268,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = auth('api')->user()->load(['admin', 'patient', 'cabinet']);
+        $user = auth('api')->user()->load(['admin', 'patient', 'cabinet', 'secretaryRequest.medecin']);
 
         $role = $user->admin?->role ?? 'patient';
 
@@ -202,6 +276,50 @@ class AuthController extends Controller
             'user' => $user,
             'role' => $role,
             'cabinet' => $user->cabinet,
+            'secretary_request' => $user->secretaryRequest ? [
+                'id' => $user->secretaryRequest->id,
+                'statut' => $user->secretaryRequest->statut,
+                'date_demande' => $user->secretaryRequest->date_demande,
+                'date_decision' => $user->secretaryRequest->date_decision,
+                'motif_refus' => $user->secretaryRequest->motif_refus,
+                'medecin' => $user->secretaryRequest->medecin ? [
+                    'id' => $user->secretaryRequest->medecin->id,
+                    'nom' => $user->secretaryRequest->medecin->nom,
+                    'prenom' => $user->secretaryRequest->medecin->prenom,
+                    'email' => $user->secretaryRequest->medecin->email,
+                ] : null,
+            ] : null,
+        ], 200);
+    }
+
+    public function mySecretaryRequest(Request $request): JsonResponse
+    {
+        $user = auth('api')->user();
+
+        if (!$user->isSecretaire()) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        $secretaryRequest = $user->load('secretaryRequest.medecin')->secretaryRequest;
+
+        if (!$secretaryRequest) {
+            return response()->json(['message' => 'Demande introuvable.'], 404);
+        }
+
+        return response()->json([
+            'secretary_request' => [
+                'id' => $secretaryRequest->id,
+                'statut' => $secretaryRequest->statut,
+                'date_demande' => $secretaryRequest->date_demande,
+                'date_decision' => $secretaryRequest->date_decision,
+                'motif_refus' => $secretaryRequest->motif_refus,
+                'medecin' => $secretaryRequest->medecin ? [
+                    'id' => $secretaryRequest->medecin->id,
+                    'nom' => $secretaryRequest->medecin->nom,
+                    'prenom' => $secretaryRequest->medecin->prenom,
+                    'email' => $secretaryRequest->medecin->email,
+                ] : null,
+            ],
         ], 200);
     }
 

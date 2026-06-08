@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Models\SecretaryMedecin;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Admin extends Model
 {
@@ -47,6 +49,18 @@ class Admin extends Model
     {
         return $this->belongsToMany(Patient::class, 'patient_medecin', 'medecin_id', 'patient_id')
             ->withPivot('date_affectation', 'statut')
+            ->withTimestamps();
+    }
+
+    public function secretaryRequests(): HasMany
+    {
+        return $this->hasMany(SecretaryMedecin::class, 'medecin_id');
+    }
+
+    public function secretaires(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'secretary_medecin', 'medecin_id', 'secretary_id')
+            ->withPivot('statut', 'date_demande', 'date_decision', 'motif_refus')
             ->withTimestamps();
     }
 

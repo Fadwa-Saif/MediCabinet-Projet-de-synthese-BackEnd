@@ -7,6 +7,7 @@ use App\Models\Admin;
 use App\Models\Disponibilite;
 use App\Models\RendezVous;
 use App\Models\Notification;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,13 @@ class RendezVousController extends Controller
 
         if ($user->isMedecin()) {
             $query->where('admin_id', $user->admin->id);
+        } elseif ($user->isSecretaire()) {
+            $doctorAdminId = $this->getSecretaryDoctorAdminId();
+            if ($doctorAdminId) {
+                $query->where('admin_id', $doctorAdminId);
+            } else {
+                $query->whereRaw('0 = 1');
+            }
         } elseif ($user->isPatient()) {
             $query->where('patient_id', $user->patient->id);
         }
@@ -169,8 +177,49 @@ class RendezVousController extends Controller
         return response()->json($rendezvous, 201);
     }
 
+    public function secretaryAppointments(Request $request): JsonResponse
+    {
+        return $this->index($request);
+    }
+
+    private function getSecretaryDoctorAdminId(): ?int
+    {
+        $user = auth('api')->user();
+        $doctorUserId = $user->secretaryRequest?->medecin_id;
+
+        if (!$doctorUserId) {
+            return null;
+        }
+
+        return User::find($doctorUserId)?->admin?->id;
+    }
+
+    private function canAccessRendezVous(RendezVous $rendezvous): bool
+    {
+        $user = auth('api')->user();
+
+        if ($user->isMedecin()) {
+            return $rendezvous->admin_id === $user->admin->id;
+        }
+
+        if ($user->isSecretaire()) {
+            $doctorAdminId = $this->getSecretaryDoctorAdminId();
+            return $doctorAdminId ? $rendezvous->admin_id === $doctorAdminId : false;
+        }
+
+        if ($user->isPatient()) {
+            return $rendezvous->patient_id === $user->patient->id;
+        }
+
+        return false;
+    }
+
     public function update(Request $request, RendezVous $rendezvous): JsonResponse
     {
+        if (!$this->canAccessRendezVous($rendezvous)) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         $validated = $request->validate([
             'date_heure'    => 'nullable|date|after:now',
             'motif'         => 'nullable|string|max:255',
@@ -206,6 +255,10 @@ class RendezVousController extends Controller
 
     public function show(RendezVous $rendezvous): JsonResponse
     {
+        if (!$this->canAccessRendezVous($rendezvous)) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         $rendezvous->load(['patient.user', 'admin.user', 'consultation']);
 
         return response()->json($rendezvous, 200);
@@ -213,6 +266,10 @@ class RendezVousController extends Controller
 
     public function annuler(RendezVous $rendezvous): JsonResponse
     {
+        if (!$this->canAccessRendezVous($rendezvous)) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         if ($rendezvous->statut === 'annule' || $rendezvous->statut === 'termine') {
             return response()->json(['message' => 'Impossible d\'annuler ce rendez-vous.'], 422);
         }
@@ -225,6 +282,10 @@ class RendezVousController extends Controller
     // ← ADD THIS METHOD
     public function reprendre(RendezVous $rendezvous): JsonResponse
     {
+        if (!$this->canAccessRendezVous($rendezvous)) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
         if ($rendezvous->statut !== 'annule') {
             return response()->json(['message' => 'Seuls les rendez-vous annulés peuvent être repris.'], 422);
         }
@@ -233,6 +294,52 @@ class RendezVousController extends Controller
 
         return response()->json([
             'message' => 'Rendez-vous repris avec succès',
+            'data' => $rendezvous
+        ], 200);
+    }
+
+    public function updatePatient(Request $request, RendezVous $rendezvous): JsonResponse
+    {
+        if (!$this->canAccessRendezVous($rendezvous)) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        $user = auth('api')->user();
+
+        // Authorize: patients can update their own RDV; secretaries may also update
+        if ($user->isPatient()) {
+            if ($user->patient->id !== $rendezvous->patient_id) {
+                return response()->json(['message' => 'Non autorisé.'], 403);
+            }
+        } elseif (! $user->isSecretaire()) {
+            return response()->json(['message' => 'Non autorisé.'], 403);
+        }
+
+        // Only allow editing if status is 'en_attente'
+        if ($rendezvous->statut !== 'en_attente') {
+            return response()->json(['message' => 'Seuls les rendez-vous en attente peuvent être modifiés.'], 422);
+        }
+
+        $validated = $request->validate([
+            'date_heure'    => 'required|date|after:now',
+            'motif'         => 'nullable|string|max:255',
+            'duree_minutes' => 'required|integer|min:1',
+        ]);
+
+        // Check for conflicts (excluding current appointment)
+        $conflictingRdv = RendezVous::where('admin_id', $rendezvous->admin_id)
+            ->where('date_heure', $validated['date_heure'])
+            ->where('id', '!=', $rendezvous->id)
+            ->exists();
+
+        if ($conflictingRdv) {
+            return response()->json(['message' => 'Ce créneau est déjà réservé.'], 409);
+        }
+
+        $rendezvous->update($validated);
+
+        return response()->json([
+            'message' => 'Rendez-vous modifié avec succès',
             'data' => $rendezvous
         ], 200);
     }
@@ -251,47 +358,4 @@ class RendezVousController extends Controller
 
         return $days[$dayOfWeek] ?? 'Lun';
     }
-
-    //modifier rendez vous par le patient (seulement si en_attente)
-    public function updatePatient(Request $request, RendezVous $rendezvous): JsonResponse
-{
-    $user = auth('api')->user();
-    
-    // Authorize: patients can update their own RDV; secretaries may also update
-    if ($user->isPatient()) {
-        if ($user->patient->id !== $rendezvous->patient_id) {
-            return response()->json(['message' => 'Non autorisé.'], 403);
-        }
-    } elseif (! $user->isSecretaire()) {
-        return response()->json(['message' => 'Non autorisé.'], 403);
-    }
-    
-    // Only allow editing if status is 'en_attente'
-    if ($rendezvous->statut !== 'en_attente') {
-        return response()->json(['message' => 'Seuls les rendez-vous en attente peuvent être modifiés.'], 422);
-    }
-
-    $validated = $request->validate([
-        'date_heure'    => 'required|date|after:now',
-        'motif'         => 'nullable|string|max:255',
-        'duree_minutes' => 'required|integer|min:1',
-    ]);
-
-    // Check for conflicts (excluding current appointment)
-    $conflictingRdv = RendezVous::where('admin_id', $rendezvous->admin_id)
-        ->where('date_heure', $validated['date_heure'])
-        ->where('id', '!=', $rendezvous->id)
-        ->exists();
-
-    if ($conflictingRdv) {
-        return response()->json(['message' => 'Ce créneau est déjà réservé.'], 409);
-    }
-
-    $rendezvous->update($validated);
-
-    return response()->json([
-        'message' => 'Rendez-vous modifié avec succès',
-        'data' => $rendezvous
-    ], 200);
-}
 }

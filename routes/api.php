@@ -66,12 +66,12 @@ Route::middleware('role:medecin,secretaire,patient')->group(function () {
 });
 
 // ── Multi-Role Endpoints ───────────────────────────────────────────────
-Route::middleware('role:medecin,secretaire')->group(function () {
+Route::middleware(['role:medecin,secretaire', 'secretary.approved'])->group(function () {
     Route::patch('rendezvous/{rendezvous}',               [RendezVousController::class, 'update']);
     Route::post('rendezvous/book',                        [RendezVousController::class, 'store']); // Use a specific alias or identical path
 });
 
-Route::middleware('role:patient,secretaire')->group(function () {
+Route::middleware(['role:patient,secretaire', 'secretary.approved'])->group(function () {
     Route::patch('rendezvous/{rendezvous}/annuler',       [RendezVousController::class, 'annuler']);
     Route::patch('rendezvous/{rendezvous}/reprendre',     [RendezVousController::class, 'reprendre']);
     // Allow patients to update their own pending appointments
@@ -112,6 +112,12 @@ Route::middleware('role:medecin')->group(function () {
     Route::get('mes-patients',                            [PatientController::class, 'mesPatients']);
     Route::get('patients/{patientId}/historique',         [ConsultationController::class, 'historique']);
 
+    Route::get('secretary-requests',                      [AdminController::class, 'secretaryRequests']);
+    Route::get('medecin/demandes-secretaires',            [AdminController::class, 'secretaryRequests']);
+    Route::patch('secretary-requests/{id}',               [AdminController::class, 'updateSecretaryRequest']);
+    Route::post('medecin/approuver-secretaire/{id}',      [AdminController::class, 'approveSecretaryRequest']);
+    Route::post('medecin/refuser-secretaire/{id}',        [AdminController::class, 'refuseSecretaryRequest']);
+
     Route::post('consultations',                          [ConsultationController::class, 'store']);
     Route::get('consultations/{consultation}',              [ConsultationController::class, 'show']);
     Route::patch('consultations/{consultation}',            [ConsultationController::class, 'update']);
@@ -133,6 +139,15 @@ Route::middleware('role:medecin')->group(function () {
     Route::post('prescriptions', [PrescriptionController::class, 'store']); // pivot ordonnance↔médicament
 });
 
+Route::middleware('role:secretaire')->group(function () {
+    Route::get('ma-demande', [AuthController::class, 'mySecretaryRequest']);
+});
+
+Route::middleware(['role:secretaire', 'secretary.approved'])->group(function () {
+    Route::get('secretary/patients', [PatientController::class, 'secretaryPatients']);
+    Route::get('secretary/appointments', [RendezVousController::class, 'secretaryAppointments']);
+});
+
 // ── Patient ───────────────────────────────────────────────────────────
 Route::middleware('role:patient')->group(function () {    Route::get('medecins',                                [AdminController::class, 'listMedecins']);    Route::post('rendezvous',                             [RendezVousController::class, 'store']);
     Route::post('analyses',                               [AnalyseController::class, 'store']);
@@ -143,7 +158,7 @@ Route::middleware('role:patient')->group(function () {    Route::get('medecins',
 });
 
 // ── Admin / Dashboard (Capabilities for Medecin & Secretaire) ────────────
-Route::middleware('role:medecin,secretaire')->prefix('admin')->group(function () {
+Route::middleware(['role:medecin,secretaire', 'secretary.approved'])->prefix('admin')->group(function () {
     Route::get('dashboard',                               [AdminController::class, 'dashboard']);
     Route::get('admins',                                  [AdminController::class, 'index']);
 });
@@ -155,6 +170,6 @@ Route::middleware('role:medecin')->prefix('admin')->group(function () {
 });
 
 // ── Patient deletion (Medecin & Secretaire) ──────────────────────────
-Route::middleware('role:medecin,secretaire')->group(function () {
+Route::middleware(['role:medecin,secretaire', 'secretary.approved'])->group(function () {
     Route::delete('patients/{patient}',                   [PatientController::class, 'destroy']);
 });
