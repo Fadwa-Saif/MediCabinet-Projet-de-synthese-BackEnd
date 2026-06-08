@@ -123,6 +123,13 @@ class AuthController extends Controller
                         ]);
                     }
                     $medecin = $cabinet->doctor;
+                    
+                    \Log::info('Secretary registration - cabinet lookup', [
+                        'cabinet_id' => $validated['cabinet_id'],
+                        'cabinet' => $cabinet ? $cabinet->toArray() : null,
+                        'doctor' => $medecin ? $medecin->toArray() : null,
+                        'doctor_admin_role' => $medecin?->admin?->role,
+                    ]);
                 }
 
                 if (!$medecin || $medecin->admin?->role !== 'medecin') {
