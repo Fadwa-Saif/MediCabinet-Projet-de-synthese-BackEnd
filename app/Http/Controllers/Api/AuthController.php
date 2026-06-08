@@ -32,9 +32,9 @@ class AuthController extends Controller
             'adresse' => 'nullable|string',
             'ville' => 'nullable|string|max:100',
             'specialite' => 'nullable|string|max:120',
-            // `cabinet_id` and `medecin_id` are only required when registering a secretary
-            'cabinet_id' => 'nullable|exists:cabinets,id|required_if:role,secretaire',
-            'medecin_id' => 'nullable|exists:users,id|required_if:role,secretaire',
+            // `cabinet_id` or `medecin_id` is required for secretaries, but not both.
+            'cabinet_id' => 'nullable|exists:cabinets,id|required_if:role,secretaire|required_without:medecin_id',
+            'medecin_id' => 'nullable|exists:users,id|required_if:role,secretaire|required_without:cabinet_id',
             'cabinet' => 'nullable|array',
             'cabinet.nom' => 'nullable|string|max:150',
             'cabinet.adresse' => 'nullable|string',
