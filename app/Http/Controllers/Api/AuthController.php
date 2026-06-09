@@ -114,7 +114,7 @@ class AuthController extends Controller
                 $medecin = null;
 
                 if (!empty($validated['medecin_id'])) {
-                    $medecin = User::with('admin', 'cabinet')->find($validated['medecin_id']);
+                    $medecin = User::with('admin', 'cabinet', 'cabinetOwned')->find($validated['medecin_id']);
                 } elseif (!empty($validated['cabinet_id'])) {
                     $cabinet = Cabinet::with('doctor')->find($validated['cabinet_id']);
                     if (!$cabinet) {
@@ -132,7 +132,13 @@ class AuthController extends Controller
                     ]);
                 }
 
-                if (!$medecin || $medecin->admin?->role !== 'medecin') {
+                // A doctor is valid if they have a cabinet (are a docteur) OR have an Admin record with role 'medecin'
+                $isValidDoctor = $medecin && (
+                    $medecin->cabinetOwned()->exists() || 
+                    $medecin->admin?->role === 'medecin'
+                );
+
+                if (!$isValidDoctor) {
                     throw ValidationException::withMessages([
                         'medecin_id' => 'Médecin introuvable ou invalide.',
                     ]);
