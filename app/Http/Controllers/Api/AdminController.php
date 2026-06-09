@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class AdminController extends Controller
@@ -176,7 +177,7 @@ class AdminController extends Controller
 
         $medecin = auth('api')->user();
         if ($secretaryRequest->medecin_id !== $medecin->id) {
-            return response()->json(['message' => 'Vous n’êtes pas autorisé à gérer cette demande.'], 403);
+            return response()->json(['message' => "Vous n'êtes pas autorisé à gérer cette demande."], 403);
         }
 
         $secretaryRequest->statut = $validated['statut'];
@@ -186,23 +187,30 @@ class AdminController extends Controller
             : null;
         $secretaryRequest->save();
 
-        // Send email notification
-        if ($validated['statut'] === 'approuvee') {
-            Mail::to($secretaryRequest->secretary->email)->send(
-                new SecretaryApprovedMail($secretaryRequest->secretary, $medecin)
-            );
-        } elseif ($validated['statut'] === 'refusee') {
-            Mail::to($secretaryRequest->secretary->email)->send(
-                new SecretaryRefusedMail(
-                    $secretaryRequest->secretary,
-                    $medecin,
-                    $secretaryRequest->motif_refus
-                )
-            );
+        // Send email notification (wrapped in try-catch so mail failure never breaks the response)
+        $emailSent = false;
+        try {
+            if ($validated['statut'] === 'approuvee') {
+                Mail::to($secretaryRequest->secretary->email)->send(
+                    new SecretaryApprovedMail($secretaryRequest->secretary, $medecin)
+                );
+            } elseif ($validated['statut'] === 'refusee') {
+                Mail::to($secretaryRequest->secretary->email)->send(
+                    new SecretaryRefusedMail(
+                        $secretaryRequest->secretary,
+                        $medecin,
+                        $secretaryRequest->motif_refus
+                    )
+                );
+            }
+            $emailSent = true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send secretary notification email: ' . $e->getMessage());
         }
 
         return response()->json([
             'message' => 'Statut de la demande mis à jour.',
+            'email_sent' => $emailSent,
             'request' => [
                 'id' => $secretaryRequest->id,
                 'secretary_id' => $secretaryRequest->secretary_id,
@@ -228,7 +236,7 @@ class AdminController extends Controller
 
         $medecin = auth('api')->user();
         if ($secretaryRequest->medecin_id !== $medecin->id) {
-            return response()->json(['message' => 'Vous n’êtes pas autorisé à gérer cette demande.'], 403);
+            return response()->json(['message' => "Vous n'êtes pas autorisé à gérer cette demande."], 403);
         }
 
         $secretaryRequest->statut = 'approuvee';
@@ -236,13 +244,20 @@ class AdminController extends Controller
         $secretaryRequest->motif_refus = null;
         $secretaryRequest->save();
 
-        // Send approval email
-        Mail::to($secretaryRequest->secretary->email)->send(
-            new SecretaryApprovedMail($secretaryRequest->secretary, $medecin)
-        );
+        // Send approval email (wrapped in try-catch so mail failure never breaks the response)
+        $emailSent = false;
+        try {
+            Mail::to($secretaryRequest->secretary->email)->send(
+                new SecretaryApprovedMail($secretaryRequest->secretary, $medecin)
+            );
+            $emailSent = true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send secretary approval email: ' . $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Secrétaire approuvée avec succès.',
+            'email_sent' => $emailSent,
             'request' => $secretaryRequest,
         ], 200);
     }
@@ -265,7 +280,7 @@ class AdminController extends Controller
 
         $medecin = auth('api')->user();
         if ($secretaryRequest->medecin_id !== $medecin->id) {
-            return response()->json(['message' => 'Vous n’êtes pas autorisé à gérer cette demande.'], 403);
+            return response()->json(['message' => "Vous n'êtes pas autorisé à gérer cette demande."], 403);
         }
 
         $secretaryRequest->statut = 'refusee';
@@ -273,17 +288,24 @@ class AdminController extends Controller
         $secretaryRequest->motif_refus = $validated['motif_refus'] ?? null;
         $secretaryRequest->save();
 
-        // Send refusal email
-        Mail::to($secretaryRequest->secretary->email)->send(
-            new SecretaryRefusedMail(
-                $secretaryRequest->secretary,
-                $medecin,
-                $secretaryRequest->motif_refus
-            )
-        );
+        // Send refusal email (wrapped in try-catch so mail failure never breaks the response)
+        $emailSent = false;
+        try {
+            Mail::to($secretaryRequest->secretary->email)->send(
+                new SecretaryRefusedMail(
+                    $secretaryRequest->secretary,
+                    $medecin,
+                    $secretaryRequest->motif_refus
+                )
+            );
+            $emailSent = true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send secretary refusal email: ' . $e->getMessage());
+        }
 
         return response()->json([
             'message' => 'Secrétaire refusée avec succès.',
+            'email_sent' => $emailSent,
             'request' => $secretaryRequest,
         ], 200);
     }
