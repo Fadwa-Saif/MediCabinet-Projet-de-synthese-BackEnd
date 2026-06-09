@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\SecretaryApprovedMail;
+use App\Mail\SecretaryRefusedMail;
 use App\Models\Admin;
 use App\Models\Analyse;
 use App\Models\Consultation;
@@ -13,6 +15,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 
 class AdminController extends Controller
 {
@@ -183,6 +186,21 @@ class AdminController extends Controller
             : null;
         $secretaryRequest->save();
 
+        // Send email notification
+        if ($validated['statut'] === 'approuvee') {
+            Mail::to($secretaryRequest->secretary->email)->send(
+                new SecretaryApprovedMail($secretaryRequest->secretary, $medecin)
+            );
+        } elseif ($validated['statut'] === 'refusee') {
+            Mail::to($secretaryRequest->secretary->email)->send(
+                new SecretaryRefusedMail(
+                    $secretaryRequest->secretary,
+                    $medecin,
+                    $secretaryRequest->motif_refus
+                )
+            );
+        }
+
         return response()->json([
             'message' => 'Statut de la demande mis à jour.',
             'request' => [
@@ -218,6 +236,11 @@ class AdminController extends Controller
         $secretaryRequest->motif_refus = null;
         $secretaryRequest->save();
 
+        // Send approval email
+        Mail::to($secretaryRequest->secretary->email)->send(
+            new SecretaryApprovedMail($secretaryRequest->secretary, $medecin)
+        );
+
         return response()->json([
             'message' => 'Secrétaire approuvée avec succès.',
             'request' => $secretaryRequest,
@@ -249,6 +272,15 @@ class AdminController extends Controller
         $secretaryRequest->date_decision = now();
         $secretaryRequest->motif_refus = $validated['motif_refus'] ?? null;
         $secretaryRequest->save();
+
+        // Send refusal email
+        Mail::to($secretaryRequest->secretary->email)->send(
+            new SecretaryRefusedMail(
+                $secretaryRequest->secretary,
+                $medecin,
+                $secretaryRequest->motif_refus
+            )
+        );
 
         return response()->json([
             'message' => 'Secrétaire refusée avec succès.',
